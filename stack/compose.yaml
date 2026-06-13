@@ -1,0 +1,97 @@
+name: example-of-compose-file
+
+services:
+  broker:
+    build: ./broker
+    volumes:
+      - ${HOME}/.config/agent-creds:/secrets:ro
+      - ./broker/providers:/app/providers:ro
+    env_file: .env
+    environment:
+      GITHUB_APP_PRIVATE_KEY_PATH: /secrets/github-app.pem
+      ANTHROPIC_API_KEY_PATH: /secrets/anthropic.key
+      CLOUDFLARE_MINTER_TOKEN_PATH: /secrets/cloudflare-minter.token
+    networks: [secure]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:8080/healthz', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  proxy:
+    build: ./proxy
+    depends_on:
+      broker:
+        condition: service_healthy
+    volumes:
+      - ./proxy/addons:/addons:ro
+      - proxy-certs:/home/mitmproxy/.mitmproxy
+    environment:
+      BROKER_URL: http://broker:8080
+    networks: [secure, dev]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /home/mitmproxy/.mitmproxy/mitmproxy-ca-cert.pem",
+        ]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  cred-gateway:
+    build: ./cred-gateway
+    depends_on:
+      broker:
+        condition: service_healthy
+    networks: [secure, dev]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+  dev:
+    build: ./dev
+    depends_on:
+      proxy:
+        condition: service_healthy
+      cred-gateway:
+        condition: service_healthy
+    volumes:
+      - ../:/workspace:cached
+      - proxy-certs:/proxy-certs:ro
+    environment:
+      HTTP_PROXY: http://proxy:8080
+      HTTPS_PROXY: http://proxy:8080
+      NO_PROXY: localhost,127.0.0.1,cred-gateway
+      NODE_EXTRA_CA_CERTS: /proxy-certs/mitmproxy-ca-cert.pem
+      REQUESTS_CA_BUNDLE: /proxy-certs/mitmproxy-ca-cert.pem
+      SSL_CERT_FILE: /proxy-certs/mitmproxy-ca-cert.pem
+      GIT_CREDENTIAL_URL: http://cred-gateway/github/credential
+      GITHUB_IDENTITY_URL: http://cred-gateway/github/identity
+      GH_TOKEN: proxy-injected
+      CLOUDFLARE_API_TOKEN: proxy-injected
+    networks: [dev]
+    command: sleep infinity
+
+networks:
+  secure:
+    driver: bridge
+  dev:
+    driver: bridge
+
+volumes:
+  proxy-certs:

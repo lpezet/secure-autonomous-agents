@@ -1,0 +1,12 @@
+{
+  "name": "agent-broker",
+  "version": "1.0.0",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@octokit/auth-app": "^7.1.0"
+  }
+}

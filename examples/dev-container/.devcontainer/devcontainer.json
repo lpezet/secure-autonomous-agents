@@ -1,0 +1,15 @@
+{
+  "name": "agent-dev",
+  "dockerComposeFile": "compose.yaml",
+  "service": "dev",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "postCreateCommand": "/workspace/.devcontainer/dev/setup.sh",
+  "postStartCommand": "/workspace/.devcontainer/dev/setup-start.sh",
+  "remoteUser": "node",
+  "customizations": {
+    "vscode": {
+      "extensions": ["anthropic.claude-code"]
+    }
+  }
+}
