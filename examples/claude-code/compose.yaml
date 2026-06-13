@@ -2,7 +2,7 @@ name: claude-code-agent
 
 services:
   broker:
-    build: https://github.com/lpezet/secure-autonomous-agents.git#v1.0.0:stack/broker
+    build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/broker
     volumes:
       - ${HOME}/.config/agent-creds:/secrets:ro
       - ./providers:/app/providers:ro
@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   proxy:
-    build: https://github.com/lpezet/secure-autonomous-agents.git#v1.0.0:stack/proxy
+    build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/proxy
     depends_on:
       broker:
         condition: service_healthy
@@ -49,7 +49,7 @@ services:
     restart: unless-stopped
 
   cred-gateway:
-    build: https://github.com/lpezet/secure-autonomous-agents.git#v1.0.0:stack/cred-gateway
+    build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/cred-gateway
     depends_on:
       broker:
         condition: service_healthy
