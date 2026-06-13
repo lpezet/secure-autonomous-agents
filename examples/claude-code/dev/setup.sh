@@ -5,8 +5,8 @@
 set -euo pipefail
 
 echo "[setup] trusting mitmproxy CA cert..."
-sudo cp /proxy-certs/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy.crt
-sudo update-ca-certificates
+cp /proxy-certs/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy.crt
+update-ca-certificates
 
 echo "[setup] configuring git credential helper..."
 git config --global credential.helper "!f() { curl -s \"\$GIT_CREDENTIAL_URL\"; }; f"

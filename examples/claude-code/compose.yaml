@@ -9,7 +9,6 @@ services:
     env_file: .env
     environment:
       GITHUB_APP_PRIVATE_KEY_PATH: /secrets/github-app.pem
-      ANTHROPIC_API_KEY_PATH: /secrets/anthropic.key
     networks: [secure]
     healthcheck:
       test:
@@ -71,6 +70,10 @@ services:
         condition: service_healthy
     volumes:
       - proxy-certs:/proxy-certs:ro
+      - ./workspace/.claude:/root/.claude
+      - ./workspace/.claude.json:/root/.claude.json
+      - ./workspace/.config:/root/.config
+      - ./workspace/CLAUDE.md:/root/CLAUDE.md:ro
       # Mount the repo or project Claude Code will work on:
       # - /path/to/your/project:/workspace
     environment:
