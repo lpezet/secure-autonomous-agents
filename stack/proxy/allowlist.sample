@@ -1,0 +1,21 @@
+# Egress allowlist for secure agent stack.
+# The proxy blocks CONNECT requests to any domain not listed here.
+# One domain per line. Lines starting with # and blank lines are ignored.
+# Restart the proxy after editing
+
+# GitHub — API, git push/pull, uploads, raw content
+api.github.com
+uploads.github.com
+github.com
+objects.githubusercontent.com
+raw.githubusercontent.com
+codeload.github.com
+
+# Anthropic API (Claude Code, claude CLI)
+api.anthropic.com
+
+# Cloudflare API (wrangler deployments)
+api.cloudflare.com
+
+# npm registry — uncomment if the agent runs npm install / npm publish
+# registry.npmjs.org

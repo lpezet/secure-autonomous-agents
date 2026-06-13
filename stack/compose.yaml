@@ -34,6 +34,8 @@ services:
     volumes:
       - ./proxy/addons:/addons:ro
       - proxy-certs:/home/mitmproxy/.mitmproxy
+      # Uncomment the line below to enable proxy allowlist
+      # - ./proxy/allowlist:/etc/agent-allowlist:ro
     environment:
       BROKER_URL: http://broker:8080
     networks: [secure, dev]
