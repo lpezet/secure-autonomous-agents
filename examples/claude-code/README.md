@@ -1,11 +1,8 @@
-# Claude Code Agent Example
+# Claude Code in a Secured Container
 
-Runs Claude Code as a headless agent inside a secure container. No credentials are present in
-the container — the Anthropic API key and GitHub tokens are injected at the network level by
-mitmproxy. Claude Code cannot exfiltrate credentials even if it tries.
-
-The agent is intended to receive tasks from an external channel (e.g. Telegram). Channel
-integration is a TODO; for now the container stays alive after setup and waits.
+Runs Claude Code inside the secure proxy stack. No credentials are present in the container —
+the Anthropic API key and GitHub tokens are injected at the network level by mitmproxy. Claude
+Code cannot exfiltrate credentials even if it tries.
 
 ## Prerequisites
 
@@ -42,7 +39,7 @@ touch workspace/CLAUDE.md
 ```
 
 `workspace/CLAUDE.md` is mounted read-only as the agent's global instructions file.
-Edit it to give the agent standing instructions before starting. `workspace/.claude/`
+Edit it to give Claude Code standing instructions before starting. `workspace/.claude/`
 persists Claude Code's state (projects, memory, hooks) across container restarts.
 
 ```bash
@@ -55,6 +52,20 @@ On startup `dev/entrypoint.sh` calls `setup.sh`, which:
 2. Wires the git credential helper to cred-gateway
 3. Verifies the broker is unreachable (security boundary check)
 4. Fetches the GitHub App identity and writes `git config user.name/email`
+
+## Attach
+
+Once setup completes, attach an interactive Claude Code session:
+
+```bash
+docker compose exec -it dev claude
+```
+
+Point it at a workspace repo:
+
+```bash
+docker compose exec -it dev claude /workspace
+```
 
 ## Commands
 
@@ -70,7 +81,7 @@ docker compose logs -f broker proxy cred-gateway dev
 docker compose down -v
 ```
 
-**Open a shell in the agent container** (for debugging):
+**Open a shell in the container** (for debugging):
 ```bash
 docker compose exec dev bash
 ```
@@ -96,10 +107,10 @@ docker compose up -d
 
 ## Testing the security boundary
 
-Run these from inside the dev container (`docker compose exec dev bash`):
+Run these from inside the container (`docker compose exec dev bash`):
 
 ```bash
-# 1. Broker must be unreachable directly from the agent container
+# 1. Broker must be unreachable directly from the container
 curl -s --max-time 2 http://broker:8080/healthz
 # → curl: (6) Could not resolve host  OR  (28) Connection timed out
 
@@ -141,18 +152,10 @@ volumes:
   - /path/to/your/project:/workspace
 ```
 
-Then exec into the container and run Claude Code from `/workspace`.
+## Extending
 
-## Channel integration
-
-`dev/entrypoint.sh` ends with `exec sleep infinity` as a placeholder. Replace that line with
-your channel listener, e.g.:
-
-```bash
-exec bun run /app/telegram-bot.ts
-```
-
-The listener should invoke Claude Code for each incoming task:
+To drive Claude Code autonomously, replace `exec sleep infinity` in `dev/entrypoint.sh` with
+a channel listener that invokes:
 
 ```bash
 claude -p "$task" --allowedTools "Bash,Read,Write,Edit" /workspace

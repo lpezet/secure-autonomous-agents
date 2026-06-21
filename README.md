@@ -10,7 +10,7 @@ which injects credentials fetched from a broker the agent cannot reach directly.
 stack/          Core reusable infrastructure (broker, proxy, cred-gateway, base dev image)
 examples/
   dev-container/   VS Code dev container — open any repo in a secured workspace
-  claude-code/     Headless Claude Code agent — receives tasks, runs autonomously
+  claude-code/     Claude Code in a secured container — attach and use interactively
 ```
 
 Each example's `compose.yaml` builds `broker`, `proxy`, and `cred-gateway` directly from
@@ -77,9 +77,9 @@ Open `examples/dev-container/` in VS Code → **Dev Containers: Reopen in Contai
 
 See [`examples/dev-container/README.md`](examples/dev-container/README.md) for full setup.
 
-### Headless Claude Code agent
+### Claude Code in a secured container
 
-Runs Claude Code as a background agent with no credentials in the container.
+Runs Claude Code inside the secure proxy stack with no credentials in the container.
 
 ```bash
 cd examples/claude-code
