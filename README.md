@@ -58,6 +58,25 @@ The broker is on `secure` only. Docker DNS will not resolve `broker` from the de
 and there is no route even if it did. The only broker-adjacent surface reachable from dev is
 the two paths nginx explicitly whitelists in `cred-gateway`.
 
+### Why cred-gateway exists
+
+Git authenticates to `github.com` via HTTP Basic auth inside the HTTPS tunnel — a different
+flow from API calls. The proxy addon (`010_github.py`) deliberately does **not** match
+`github.com`: injecting a token there would conflict with git's Basic auth handshake inside
+the MITMed connection. So git credentials cannot go through the proxy injection path.
+
+Instead, git is configured with a credential helper: `curl http://cred-gateway/github/credential`.
+This is a direct HTTP call from the dev container (not proxied) that returns the token in
+git's `username=x-access-token\npassword=<token>` format.
+
+cred-gateway (nginx) sits on both networks and acts as the narrow bridge: it exposes only
+`/github/credential` and `/github/identity` to the dev container, proxying those through to
+the broker on `secure`. Raw credential endpoints (`/anthropic/key`, `/github/token`) return
+403 — exposing them would let the dev container exfiltrate real secrets directly.
+
+In short: the **proxy** handles API traffic via token injection; **cred-gateway** handles git's
+credential helper via a tightly scoped nginx whitelist.
+
 ## Quick start
 
 Each example is self-contained. See its README for prerequisites, credential setup, and
