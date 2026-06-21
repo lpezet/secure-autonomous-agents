@@ -1,7 +1,14 @@
 # Egress allowlist for secure agent stack.
-# The proxy blocks CONNECT requests to any domain not listed here.
-# One domain per line. Lines starting with # and blank lines are ignored.
-# Restart the proxy after editing
+# One entry per line; blank lines and lines starting with # are ignored.
+# After editing, restart the proxy: docker compose up -d --force-recreate proxy
+#
+# Format: domain [METHODS]
+#   domain   — exact hostname or wildcard (*.example.com matches all subdomains)
+#   METHODS  — optional comma-separated HTTP methods (default: GET,HEAD,OPTIONS)
+#              use * to allow all methods
+#
+# CONNECT is always allowed for listed domains (needed for HTTPS tunnels).
+# The actual method is enforced on the inner request inside the tunnel.
 
 # GitHub — API, git push/pull, uploads, raw content
 api.github.com

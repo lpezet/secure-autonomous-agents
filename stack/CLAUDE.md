@@ -43,8 +43,13 @@ docker run --rm test-cred-gateway nginx -t
 
 **Restart a service after rotating a credential:**
 ```bash
-docker compose -f compose.yaml restart broker
-docker compose -f compose.yaml restart broker proxy  # for Anthropic key rotation
+docker compose -f compose.yaml up -d --force-recreate broker
+docker compose -f compose.yaml up -d --force-recreate broker proxy  # for Anthropic key rotation
+```
+
+**Restart the proxy after editing the allowlist file:**
+```bash
+docker compose -f compose.yaml up -d --force-recreate proxy
 ```
 
 **Force-regenerate the mitmproxy CA cert:**

@@ -22,8 +22,8 @@ CONNECT is always permitted for allowlisted domains — it is the mechanism HTTP
 uses to establish the tunnel; the actual method is checked on the inner request.
 
 If the file is absent or unreadable, all destinations are permitted and a
-warning is logged at startup. Restart the proxy after editing the file to
-pick up changes.
+warning is logged at startup. After editing the file, restart the proxy to
+pick up changes: docker compose up -d --force-recreate proxy
 
 Internal host blocking (broker, cred-gateway) is handled by policy.py, which
 runs before this addon.

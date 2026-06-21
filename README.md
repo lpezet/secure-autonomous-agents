@@ -58,53 +58,10 @@ The broker is on `secure` only. Docker DNS will not resolve `broker` from the de
 and there is no route even if it did. The only broker-adjacent surface reachable from dev is
 the two paths nginx explicitly whitelists in `cred-gateway`.
 
-## Prerequisites
-
-### GitHub App
-
-Create a GitHub App with these **repository permissions** (minimum):
-
-- Contents: Read & Write
-- Metadata: Read (auto-included)
-- Pull requests: Read & Write
-- Issues: Read & Write (if the agent files issues)
-- Workflows: Read & Write (only if the agent edits `.github/workflows/`)
-
-No webhook required.
-
-**Steps:**
-
-1. GitHub → Settings → Developer settings → GitHub Apps → New GitHub App
-2. Generate a private key and download the `.pem` file
-3. Note the **App ID** from the App's settings page
-4. Install the App on the org/account: "Install App" tab → choose target → choose repos
-5. After install, note the **Installation ID** — it's the trailing number in the URL,
-   e.g. `https://github.com/settings/installations/78901234` → ID is `78901234`
-6. The App must be installed on every repo the agent will touch
-
-### Credential files
-
-```bash
-mkdir -p ~/.config/agent-creds
-chmod 700 ~/.config/agent-creds
-
-# GitHub App private key (required by all examples)
-cp /path/to/your-app.private-key.pem ~/.config/agent-creds/github-app.pem
-
-# Anthropic API key — use printf to avoid a trailing newline
-printf 'sk-ant-...' > ~/.config/agent-creds/anthropic.key
-
-# Cloudflare minter token (only needed if using the Cloudflare provider)
-# Requires "User API Tokens:Edit" permission
-printf '<token>' > ~/.config/agent-creds/cloudflare-minter.token
-
-chmod 600 ~/.config/agent-creds/*
-```
-
-> **Note:** The `claude-code` example reads `ANTHROPIC_API_KEY` from `.env` rather than from a
-> file. See `examples/claude-code/.env.example` for details.
-
 ## Quick start
+
+Each example is self-contained. See its README for prerequisites, credential setup, and
+security boundary tests.
 
 ### VS Code dev container
 
@@ -113,14 +70,12 @@ work transparently — real credentials are injected at the network level.
 
 ```bash
 cd examples/dev-container/.devcontainer
-cp .env.example .env
-# fill in GITHUB_APP_ID and GITHUB_APP_INSTALLATION_ID
+cp .env.example .env   # fill in GITHUB_APP_ID and GITHUB_APP_INSTALLATION_ID
 ```
 
 Open `examples/dev-container/` in VS Code → **Dev Containers: Reopen in Container**.
 
-See [`examples/dev-container/README.md`](examples/dev-container/README.md) for operations,
-credential rotation, and security boundary tests.
+See [`examples/dev-container/README.md`](examples/dev-container/README.md) for full setup.
 
 ### Headless Claude Code agent
 
@@ -128,20 +83,12 @@ Runs Claude Code as a background agent with no credentials in the container.
 
 ```bash
 cd examples/claude-code
-cp .env.example .env
-# fill in GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and ANTHROPIC_API_KEY
-
-# Create workspace files Docker needs before first up
-mkdir -p workspace/.claude workspace/.config
-echo '{}' > workspace/.claude.json
-touch workspace/CLAUDE.md
-
+cp .env.example .env   # fill in GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, ANTHROPIC_API_KEY
 docker compose up --build -d
 docker compose logs -f dev   # watch setup complete
 ```
 
-See [`examples/claude-code/README.md`](examples/claude-code/README.md) for workspace setup,
-channel integration, and security boundary tests.
+See [`examples/claude-code/README.md`](examples/claude-code/README.md) for full setup.
 
 ## Extending the stack
 
@@ -160,6 +107,39 @@ channel integration, and security boundary tests.
 The proxy can restrict outbound destinations to an explicit allowlist. Uncomment the allowlist
 volume in `compose.yaml` and copy `stack/proxy/allowlist.sample` to `proxy/allowlist/001_allowlist.py`
 (or any numbered `.py` file in that directory). Edit the file to define allowed hostnames.
+
+Each line has the form:
+
+```
+domain [METHODS]
+```
+
+`domain` is an exact hostname or a wildcard (`*.example.com` matches all subdomains).
+`METHODS` is an optional comma-separated list of HTTP methods to permit for that domain.
+Omitting `METHODS` defaults to `GET,HEAD,OPTIONS` (safe reads only).
+Use `*` to explicitly allow all methods.
+
+```
+# Default: GET, HEAD, OPTIONS only
+storage.googleapis.com
+
+# Explicit method list
+api.example.com           GET,POST
+
+# Opt in to all methods
+uploads.example.com       *
+
+# Wildcard subdomain restricted to writes
+*.internal.example.com    PUT,POST,PATCH,DELETE
+```
+
+`CONNECT` is always permitted for allowlisted domains — it is required to establish HTTPS
+tunnels. The actual HTTP method is enforced on the inner request inside the tunnel.
+
+After editing the allowlist file, restart the proxy to pick up changes:
+```bash
+docker compose up -d --force-recreate proxy
+```
 
 ## Security notes
 

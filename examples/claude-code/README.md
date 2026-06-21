@@ -82,9 +82,9 @@ docker compose exec dev /setup.sh
 
 **Restart after rotating a credential:**
 ```bash
-docker compose restart broker          # GitHub App private key (replace file, then restart)
+docker compose up -d --force-recreate broker          # GitHub App private key (replace file, then restart)
 # Anthropic key: edit ANTHROPIC_API_KEY in .env, then:
-docker compose restart broker proxy    # proxy restart needed — it caches the key for 5 min
+docker compose up -d --force-recreate broker proxy    # proxy restart needed — it caches the key for 5 min
 ```
 
 **Force-regenerate the mitmproxy CA cert:**
