@@ -1,4 +1,4 @@
-"""Inject Anthropic API key, enforce policy, log usage."""
+"""Inject Anthropic credentials (API key or OAuth token), enforce policy, log usage."""
 import requests
 from mitmproxy import http, ctx
 from cachetools import TTLCache
@@ -7,12 +7,14 @@ _cache = TTLCache(maxsize=1, ttl=300)
 BROKER_URL = "http://broker:8080"
 
 
-def _get_key():
-    if "key" not in _cache:
-        r = requests.get(f"{BROKER_URL}/anthropic/key", timeout=5)
+def _get_cred():
+    """Return (type, value) from broker, cached for 5 minutes."""
+    if "cred" not in _cache:
+        r = requests.get(f"{BROKER_URL}/anthropic/cred", timeout=5)
         r.raise_for_status()
-        _cache["key"] = r.json()["key"]
-    return _cache["key"]
+        data = r.json()
+        _cache["cred"] = (data["type"], data["value"])
+    return _cache["cred"]
 
 
 def request(flow: http.HTTPFlow) -> None:
@@ -29,14 +31,22 @@ def request(flow: http.HTTPFlow) -> None:
         ctx.log.warn(f"anthropic: BLOCKED {flow.request.method} {flow.request.path}")
         return
 
-    flow.request.headers["x-api-key"] = _get_key()
-    flow.request.headers["anthropic-version"] = flow.request.headers.get(
-        "anthropic-version", "2023-06-01"
-    )
-    if "Authorization" in flow.request.headers:
-        del flow.request.headers["Authorization"]
+    cred_type, cred_value = _get_cred()
 
-    ctx.log.info(f"anthropic: {flow.request.method} {flow.request.path}")
+    # Strip whichever auth headers the agent sent, then inject the real credential.
+    for h in ("x-api-key", "Authorization"):
+        if h in flow.request.headers:
+            del flow.request.headers[h]
+
+    if cred_type == "auth_token":
+        flow.request.headers["Authorization"] = f"Bearer {cred_value}"
+        ctx.log.info(f"anthropic: injected auth token for {flow.request.method} {flow.request.path}")
+    else:
+        flow.request.headers["x-api-key"] = cred_value
+        flow.request.headers["anthropic-version"] = flow.request.headers.get(
+            "anthropic-version", "2023-06-01"
+        )
+        ctx.log.info(f"anthropic: injected api key for {flow.request.method} {flow.request.path}")
 
 
 def responseheaders(flow: http.HTTPFlow) -> None:
