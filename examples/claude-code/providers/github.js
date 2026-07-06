@@ -12,7 +12,7 @@ function getGitHubAuth() {
       "utf8",
     );
     githubAuth = createAppAuth({
-      appId: parseInt(process.env.GITHUB_APP_ID, 10),
+      appId: process.env.GITHUB_APP_ID,
       privateKey,
       installationId: parseInt(process.env.GITHUB_APP_INSTALLATION_ID, 10),
     });
