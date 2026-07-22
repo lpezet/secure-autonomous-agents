@@ -77,10 +77,15 @@ services:
         condition: service_healthy
     volumes:
       - proxy-certs:/proxy-certs:ro
-      - ./workspace/.claude:/root/.claude
-      - ./workspace/.claude.json:/root/.claude.json
-      - ./workspace/.config:/root/.config
-      - ./workspace/CLAUDE.md:/root/CLAUDE.md:ro
+      # These must target the container's HOME, which is /home/agent since the
+      # dev image stopped running as root. Mounting them at /root/ leaves them
+      # somewhere Claude Code never looks: it reads $HOME, so settings and auth
+      # state silently do not survive a container recreate.
+      # tests/integration/00-config-lint asserts these against the Dockerfile.
+      - ./workspace/.claude:/home/agent/.claude
+      - ./workspace/.claude.json:/home/agent/.claude.json
+      - ./workspace/.config:/home/agent/.config
+      - ./workspace/CLAUDE.md:/home/agent/CLAUDE.md:ro
       # Mount the repo or project Claude Code will work on:
       # - /path/to/your/project:/workspace
     environment:

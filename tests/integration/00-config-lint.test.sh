@@ -120,4 +120,31 @@ for d in examples/*/addons examples/*/.devcontainer/addons stack/proxy/addons; d
   check "$d — first addon is 000_policy.py" "000_policy.py" "$first"
 done
 
+suite "dev mounts land in the container's HOME"
+# When examples/claude-code stopped running as root, HOME moved to /home/agent
+# but the compose mounts stayed at /root/. Nothing failed loudly: Claude Code
+# read $HOME, found an empty directory, and quietly lost its settings and auth
+# on every recreate. Derive HOME from the Dockerfile rather than hardcoding it,
+# so this keeps working if the user is renamed again.
+CC_DOCKERFILE=examples/claude-code/dev/Dockerfile
+CC_COMPOSE=examples/claude-code/compose.yaml
+if [ -f "$CC_DOCKERFILE" ] && [ -f "$CC_COMPOSE" ]; then
+  home=$(grep -oP '^ENV HOME=\K\S+' "$CC_DOCKERFILE" | tail -1)
+  if [ -z "$home" ]; then
+    skip "claude-code dev HOME" "no ENV HOME in $CC_DOCKERFILE — image uses the base default"
+  else
+    ok "claude-code dev HOME is $home"
+    # Every state mount the agent needs to write must sit under it.
+    for m in .claude .claude.json .config; do
+      target=$(grep -oE "\./workspace/${m//./\\.}:[^:[:space:]]+" "$CC_COMPOSE" | head -1 | cut -d: -f2)
+      if [ -z "$target" ]; then
+        skip "workspace/$m is not mounted" ""
+      else
+        check "workspace/$m mounts under $home" "$home/$m" "$target"
+      fi
+    done
+    check_not_contains "no dev mount targets /root" "$(grep -A20 '^  dev:' "$CC_COMPOSE")" ":/root/"
+  fi
+fi
+
 finish

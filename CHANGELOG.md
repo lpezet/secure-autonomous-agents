@@ -68,7 +68,11 @@ providers without forking the image.
 
 **`examples/claude-code` runs the dev container as `agent`, not `root`.** The
 `ubuntu` user is renamed to `agent`, `HOME` becomes `/home/agent`, and Claude
-Code installs under that user.
+Code installs under that user. The persisted-state mounts move to match
+(`/root/.claude` → `/home/agent/.claude`, and likewise `.claude.json` and
+`.config`) — `tests/integration/00-config-lint` now checks those targets
+against the image's `HOME`, since a mismatch loses settings silently rather
+than failing.
 
 **`CLAUDE_VERSION` build arg** in the same example pins or refreshes the Claude
 Code install without busting the apt/node/bun layers.
@@ -81,8 +85,13 @@ Code install without busting the apt/node/bun layers.
   cannot reach (HTTPS/CONNECT, the CA cert lifecycle, `git push` through the
   credential helper) using a dedicated GitHub App, and skips cleanly when it is
   not configured. A bare `tests/run.sh` never runs e2e.
-- **`stack/cred-gateway/gateway.d/README.md`** — authoring rules for snippets.
+- **`stack/cred-gateway/gateway.d/README.md`** and
+  **`stack/broker/providers/README.md`** — authoring rules for the two content
+  seams, and an explicit statement that both directories are empty by design.
 - Reference `gateway.d/github.conf` vendored into both examples.
+- `stack/compose.yaml` now says up front that it is a reference skeleton with
+  empty provider and gateway mounts, so it will not serve credentials as-is.
+  It never did; it just did not say so.
 
 ---
 
@@ -213,13 +222,11 @@ docker compose exec dev id agent      # expect uid=1000(agent) gid=1000(agent)
 sudo chown -R 1000:1000 examples/claude-code/workspace/
 ```
 
-> **Known issue.** `examples/claude-code/compose.yaml` still mounts the
-> persisted state at `/root/.claude`, `/root/.claude.json` and `/root/.config`,
-> but the container's `HOME` is now `/home/agent`. Claude Code therefore reads
-> and writes `/home/agent/.claude`, which is *not* the bind mount, so settings
-> and auth state do not survive a container recreate. `entrypoint.sh` chowns
-> `/home/agent/.claude`, confirming that is the intended target. The mount
-> paths need to move to `/home/agent/...`; this is not fixed in 1.0.0.
+The mount targets moved with it — `/root/.claude` → `/home/agent/.claude`, and
+likewise for `.claude.json` and `.config`. If you are carrying a modified
+`compose.yaml`, make the same change: left at `/root/`, the bind mounts land
+somewhere Claude Code never reads, and settings and auth state silently vanish
+on every recreate.
 
 ### 6. Verify the boundary end to end
 
