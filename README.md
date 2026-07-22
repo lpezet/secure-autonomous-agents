@@ -11,7 +11,12 @@ stack/          Core reusable infrastructure (broker, proxy, cred-gateway, base 
 examples/
   dev-container/   VS Code dev container — open any repo in a secured workspace
   claude-code/     Claude Code in a secured container — attach and use interactively
+tests/          Regression suite — integration (no credentials) and e2e (real ones)
 ```
+
+**Upgrading from 0.1.0?** See [CHANGELOG.md](CHANGELOG.md). 1.0.0 fixes a
+credential-disclosure bug, and two of the upgrade steps are manual — a
+`docker compose pull` alone leaves you vulnerable and breaks git auth.
 
 Each example's `compose.yaml` builds `broker`, `proxy`, and `cred-gateway` directly from
 this repo's GitHub URL, so you only need the example directory itself to get started.
