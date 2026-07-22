@@ -22,7 +22,11 @@ def _get_token():
 
 
 def request(flow: http.HTTPFlow) -> None:
-    host = flow.request.pretty_host
+    # flow.request.host is the real destination. Do NOT use pretty_host here:
+    # it prefers the client-supplied Host header, so the dev container could
+    # point a request at its own server, spoof the header, and have the real
+    # credential injected into a request that never goes to the vendor.
+    host = flow.request.host
     if host not in ("api.github.com", "uploads.github.com"):
         return
 
@@ -36,7 +40,7 @@ def request(flow: http.HTTPFlow) -> None:
 
 
 def response(flow: http.HTTPFlow) -> None:
-    if flow.request.pretty_host not in ("api.github.com", "uploads.github.com"):
+    if flow.request.host not in ("api.github.com", "uploads.github.com"):
         return
     if flow.response.status_code == 401:
         _cache.clear()

@@ -18,13 +18,34 @@ from mitmproxy import http, ctx
 _INTERNAL_HOSTS = {"broker", "cred-gateway"}
 
 
+def _destination(flow: http.HTTPFlow) -> str:
+    """Host this request will actually be sent to.
+
+    NEVER use flow.request.pretty_host for a security decision. It prefers the
+    client-supplied Host header, which the dev container fully controls, while
+    mitmproxy connects to flow.request.host (from the absolute-form URI, the
+    CONNECT authority, or the TLS SNI). Matching on pretty_host let
+
+        curl --proxy http://proxy:8080 -H 'Host: example.com' \
+             http://broker:8080/github/token
+
+    sail past this addon and return a real installation token.
+    """
+    return flow.request.host
+
+
 def request(flow: http.HTTPFlow) -> None:
-    if flow.request.pretty_host in _INTERNAL_HOSTS:
+    # Checked against both the real destination and the claimed one: the first
+    # is the bypass above, the second stops a request being *labelled* internal
+    # from reaching anything. Either match denies — fail closed.
+    host = _destination(flow)
+    if host in _INTERNAL_HOSTS or flow.request.pretty_host in _INTERNAL_HOSTS:
         flow.response = http.Response.make(
             403,
             b'{"error":"internal host blocked by proxy policy"}',
             {"Content-Type": "application/json"},
         )
         ctx.log.warn(
-            f"policy: BLOCKED request to internal host {flow.request.pretty_host}"
+            f"policy: BLOCKED request to internal host {host} "
+            f"(Host header: {flow.request.pretty_host})"
         )

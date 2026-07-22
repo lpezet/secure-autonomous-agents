@@ -82,6 +82,8 @@ Everything else returns 403. `/anthropic/key`, `/github/token`, and `/cloudflare
 
 ## Non-obvious invariants
 
+**Never use `flow.request.pretty_host` for a security decision in an addon.** It prefers the client-supplied `Host` header, which the dev container fully controls, while mitmproxy connects to `flow.request.host` (absolute-form URI, CONNECT authority, or TLS SNI). Every addon originally matched `pretty_host`, which meant `curl --proxy http://proxy:8080 -H 'Host: api.anthropic.com' http://my-server/` made the proxy inject the real Anthropic key into a request delivered to `my-server`, and `-H 'Host: anything'` walked `000_policy.py` straight through to `broker:8080/github/token`. Always match on `flow.request.host`. `tests/20`, `tests/25` and `tests/30` cover each addon.
+
 **`GH_TOKEN=proxy-injected` and `CLOUDFLARE_API_TOKEN=proxy-injected` are dummy values.** They exist to satisfy client-side "am I authenticated?" checks in `gh` and `wrangler`. The proxy strips them at the wire level and injects real tokens. Do not replace them with real values — the whole point is that dev never holds real credentials.
 
 **`010_github.py` must not match `github.com`.** Git push/pull to `github.com` goes through the HTTPS credential helper (via cred-gateway), not through token injection. Adding `github.com` to the addon would conflict with git's HTTP Basic auth handshake inside the MITMed tunnel.
@@ -96,6 +98,10 @@ Everything else returns 403. `/anthropic/key`, `/github/token`, and `/cloudflare
 
 **Do not add `USER mitmproxy` to `proxy/Dockerfile`.** The base image (`mitmproxy/mitmproxy`) ships with a `docker-entrypoint.sh` that runs `usermod` (requires root) to align the `mitmproxy` user's UID with the mounted volume owner, then drops privileges via `gosu mitmproxy`. Adding `USER mitmproxy` makes the entrypoint run as non-root, causing `usermod` to fail with "operation not permitted". The `USER root` + `RUN pip install` block is correct; the entrypoint handles the privilege drop. Proxy stdout is also block-buffered when not attached to a tty — add `-e PYTHONUNBUFFERED=1` or `-it` when testing standalone to see logs in real time.
 
+## Tests
+
+`tests/run.sh` — regression suite for the security boundaries. No credentials needed; everything runs against stubs. `tests/00-config-lint.test.sh` needs no docker. See `tests/README.md`.
+
 ## Adding a new credential provider
 
 1. Add a credential file path env var under `broker` in the relevant `compose.yaml`
@@ -103,3 +109,4 @@ Everything else returns 403. `/anthropic/key`, `/github/token`, and `/cloudflare
 3. Add a numbered addon in `stack/proxy/addons/` following the `020_anthropic.py` or `030_cloudflare.py` pattern
 4. Restart the proxy — `entrypoint.sh` auto-discovers `*.py` files in `/addons/` at startup, no Dockerfile change needed
 5. Add a smoke-test section verifying injection works AND the broker endpoint is unreachable from dev
+6. Add coverage in `tests/` — at minimum a spoofed-`Host` case proving the new addon does not inject for any host but the genuine one

@@ -63,8 +63,12 @@ def _load() -> None:
     wildcards: List[Tuple[str, Optional[Set[str]]]] = []
     with open(_ALLOWLIST_PATH) as fh:
         for line in fh:
-            line = line.strip()
-            if not line or line.startswith("#"):
+            # Strip trailing comments before parsing. Without this,
+            # `api.example.com  # read only` parses "# read only" as the method
+            # list and silently blocks every method on that domain — fail-closed
+            # but baffling to debug.
+            line = line.split("#", 1)[0].strip() if not line.lstrip().startswith("#") else ""
+            if not line:
                 continue
             parts = line.lower().split(None, 1)
             domain = parts[0]
@@ -110,7 +114,11 @@ def running() -> None:
 def request(flow: http.HTTPFlow) -> None:
     if _exact is None:
         return
-    host = flow.request.pretty_host.lower()
+    # flow.request.host is the real destination. Do NOT use pretty_host here:
+    # it prefers the client-supplied Host header, so the dev container could
+    # point a request at its own server, spoof the header, and have the real
+    # credential injected into a request that never goes to the vendor.
+    host = flow.request.host.lower()
     method = flow.request.method
     if not _is_allowed(host, method):
         flow.response = http.Response.make(
