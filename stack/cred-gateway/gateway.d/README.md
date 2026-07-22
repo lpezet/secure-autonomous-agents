@@ -39,9 +39,14 @@ docker compose -f compose.yaml up -d --force-recreate cred-gateway
   for how to handle the case where they unavoidably overlap.
 - The `creds` rate-limit zone (10r/m, burst 5) is declared at `http` level in
   `nginx.conf` — reference it, don't redeclare it.
-- Validate before restarting:
+- Validate before restarting. `--add-host` is required: nginx resolves static
+  `proxy_pass` upstreams at config-parse time, so a standalone `nginx -t` fails
+  with `host not found in upstream "broker"` before it reports syntax errors.
   ```bash
   docker build -t test-cred-gateway stack/cred-gateway
-  docker run --rm -v "$PWD/examples/claude-code/gateway.d:/etc/nginx/gateway.d:ro" \
+  docker run --rm --add-host broker:127.0.0.1 \
+    -v "$PWD/examples/claude-code/gateway.d:/etc/nginx/gateway.d:ro" \
     test-cred-gateway nginx -t
   ```
+  Same reason cred-gateway needs `depends_on: broker: condition: service_healthy`
+  in compose — it will not start if broker DNS is unresolvable.
