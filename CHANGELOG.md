@@ -8,7 +8,7 @@ means the guarantees changed or an upgrade needs manual steps to stay safe.
 
 ---
 
-## 1.0.0 — unreleased
+## 1.0.0 — 2026-07-22
 
 ### Security
 
@@ -95,6 +95,13 @@ Nothing breaks for an existing deployment: you own your `compose.yaml` and it
 keeps pointing wherever it already points. It matters only when you re-copy
 from an example or follow the docs, which now use the new paths.
 
+**Example builds are pinned to `#v1.0.0`** instead of `#main`. Tracking a
+branch meant `docker compose build` silently picked up whatever landed on main
+later, while the bind-mounted addons stayed frozen at whatever you copied —
+the image moving while the security-relevant files do not is precisely the
+split step 1 below warns about. `tests/integration/00-config-lint` now fails
+if an example points at a branch.
+
 ### Added
 
 - **`tests/`** — two tiers behind a `tests/run.sh` facade.
@@ -110,6 +117,11 @@ from an example or follow the docs, which now use the new paths.
 - `stack/compose.yaml` now says up front that it is a reference skeleton with
   empty provider and gateway mounts, so it will not serve credentials as-is.
   It never did; it just did not say so.
+- Both examples ship a commented-out allowlist mount, and the README's egress
+  section is rewritten. It previously told you to copy `allowlist.sample` — a
+  plain list of domains — to `001_allowlist.py`, and to uncomment a volume
+  neither example had. Following it put a data file where the proxy globs
+  `*.py`.
 
 ---
 

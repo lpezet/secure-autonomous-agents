@@ -123,6 +123,26 @@ for d in examples/*/proxy examples/*/.devcontainer/proxy stack/proxy/addons; do
   check "$d — first addon is 000_policy.py" "000_policy.py" "$first"
 done
 
+suite "examples build from a release tag, not a branch"
+# Tracking #main means a rebuild silently picks up whatever landed on main
+# since, while the bind-mounted addons stay frozen at whatever was copied —
+# the image moves and the security-relevant files do not. That split is
+# exactly what the 0.1.0 upgrade notes warn about, so the examples must not
+# reproduce it. Bump these when cutting a release.
+for c in examples/claude-code/compose.yaml examples/dev-container/.devcontainer/compose.yaml; do
+  refs=$(grep -oE 'secure-autonomous-agents\.git#[^:]+' "$c" | cut -d'#' -f2 | sort -u)
+  if [ -z "$refs" ]; then
+    skip "$c — no git-URL builds" ""
+  else
+    bad=$(printf '%s\n' "$refs" | grep -vE '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+    if [ -z "$bad" ]; then
+      ok "$c — builds pinned to $(printf '%s' "$refs" | tr '\n' ' ')"
+    else
+      ko "$c — build ref is not a release tag" "found: $(printf '%s' "$bad" | tr '\n' ' ')"
+    fi
+  fi
+done
+
 suite "dev mounts land in the container's HOME"
 # When examples/claude-code stopped running as root, HOME moved to /home/agent
 # but the compose mounts stayed at /root/. Nothing failed loudly: Claude Code

@@ -144,9 +144,33 @@ examples/claude-code/
 
 ### Proxy allowlist
 
-The proxy can restrict outbound destinations to an explicit allowlist. Uncomment the allowlist
-volume in `compose.yaml` and copy `stack/proxy/allowlist.sample` to `proxy/allowlist/001_allowlist.py`
-(or any numbered `.py` file in that directory). Edit the file to define allowed hostnames.
+The proxy can restrict outbound destinations to an explicit allowlist. It is **off by default**:
+with no allowlist file mounted, every destination is permitted and the proxy logs a warning at
+startup. Turning it on takes two pieces — the addon that enforces it, and the file that lists
+what to permit:
+
+```bash
+cd examples/claude-code
+
+# 1. The addon. Examples do not ship it, since egress control is opt-in.
+cp ../../stack/proxy/addons/001_allowlist.py proxy/
+
+# 2. The list itself — a plain text file of domains, not Python.
+cp ../../stack/proxy/allowlist.sample allowlist
+```
+
+Then uncomment the allowlist volume in that example's `compose.yaml`:
+
+```yaml
+  proxy:
+    volumes:
+      - ./allowlist:/etc/agent-allowlist:ro
+```
+
+The list sits next to `compose.yaml` rather than inside `proxy/`, because `proxy/` is mounted
+wholesale as `/addons` — a non-addon file placed there would be mounted into `/addons` as well.
+
+Edit `allowlist` to define allowed hostnames.
 
 Each line has the form:
 
@@ -175,6 +199,9 @@ uploads.example.com       *
 
 `CONNECT` is always permitted for allowlisted domains — it is required to establish HTTPS
 tunnels. The actual HTTP method is enforced on the inner request inside the tunnel.
+
+Trailing comments are stripped, so `api.example.com  # read only` behaves as `api.example.com`.
+Before 1.0.0 that comment was parsed as the method list and blocked the domain outright.
 
 After editing the allowlist file, restart the proxy to pick up changes:
 ```bash

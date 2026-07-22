@@ -2,7 +2,7 @@ name: claude-code-agent
 
 services:
   broker:
-    build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/broker
+    build: https://github.com/lpezet/secure-autonomous-agents.git#v1.0.0:stack/broker
     volumes:
       - ${HOME}/.config/agent-creds:/secrets:ro
       - ./broker:/app/providers:ro
@@ -25,12 +25,18 @@ services:
     restart: unless-stopped
 
   proxy:
-    build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/proxy
+    build: https://github.com/lpezet/secure-autonomous-agents.git#v1.0.0:stack/proxy
     depends_on:
       broker:
         condition: service_healthy
     volumes:
       - ./proxy:/addons:ro
+      # Egress allowlist (opt-in). Copy 001_allowlist.py from stack/proxy/addons
+      # into ./proxy, then uncomment this. Absent file = every destination
+      # permitted, so the mount is what turns it on.
+      # It lives here rather than in ./proxy because that directory is mounted
+      # wholesale as /addons — a non-addon file in it would land there too.
+      # - ./allowlist:/etc/agent-allowlist:ro
       - proxy-certs:/home/mitmproxy/.mitmproxy
     environment:
       BROKER_URL: http://broker:8080
@@ -48,7 +54,7 @@ services:
     restart: unless-stopped
 
   cred-gateway:
-    build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/cred-gateway
+    build: https://github.com/lpezet/secure-autonomous-agents.git#v1.0.0:stack/cred-gateway
     depends_on:
       broker:
         condition: service_healthy
