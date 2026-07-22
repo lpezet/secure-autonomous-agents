@@ -207,10 +207,10 @@ created by 0.1.0 are owned by a user that no longer writes them:
 docker compose build --no-cache dev
 docker compose up -d --force-recreate dev
 
-# `agent` is the renamed `ubuntu` user and keeps its uid, but confirm rather
-# than assume — chowning to the wrong id is worse than not chowning at all.
-docker compose exec dev id agent
-sudo chown -R <uid>:<gid> examples/claude-code/workspace/
+# `agent` is `ubuntu` renamed, so it keeps uid/gid 1000 from ubuntu:24.04.
+# Confirm before chowning — the wrong id is worse than no chown at all.
+docker compose exec dev id agent      # expect uid=1000(agent) gid=1000(agent)
+sudo chown -R 1000:1000 examples/claude-code/workspace/
 ```
 
 > **Known issue.** `examples/claude-code/compose.yaml` still mounts the
