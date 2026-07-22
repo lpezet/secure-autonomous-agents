@@ -77,6 +77,24 @@ than failing.
 **`CLAUDE_VERSION` build arg** in the same example pins or refreshes the Claude
 Code install without busting the apt/node/bun layers.
 
+**Both examples are laid out one directory per service**, mirroring `stack/`:
+
+```
+addons/      →  proxy/addons/
+providers/   →  broker/providers/
+gateway.d/   →  cred-gateway/gateway.d/
+dev/            (unchanged)
+```
+
+Contents are untouched — this is purely a move. Previously you had to know that
+addons are a mitmproxy concept and providers a broker one to tell which
+directory belonged to which service; now the name answers it. The mount lines
+also become identical to `stack/compose.yaml`, so the two are diffable.
+
+Nothing breaks for an existing deployment: you own your `compose.yaml` and it
+keeps pointing wherever it already points. It matters only when you re-copy
+from an example or follow the docs, which now use the new paths.
+
 ### Added
 
 - **`tests/`** — two tiers behind a `tests/run.sh` facade.
@@ -119,8 +137,11 @@ repulling the image leaves the vulnerable files exactly where they are.
 Copy the fixed addons over your own:
 
 ```bash
-# from a fresh checkout of this repo at v1.0.0
-cp addons/*.py /path/to/your/deployment/addons/
+# from a fresh checkout of this repo at v1.0.0.
+# Note the source path: examples moved to one directory per service in 1.0.0,
+# so addons now live under proxy/. Your own deployment can keep whatever
+# layout it already has — only the source of the copy changed.
+cp examples/claude-code/proxy/addons/*.py /path/to/your/deployment/addons/
 ```
 
 If you have written your own addons, the fix is one line each — every host
@@ -153,7 +174,7 @@ snippet:
 
 ```bash
 mkdir -p gateway.d
-cp /path/to/repo/examples/claude-code/gateway.d/github.conf gateway.d/
+cp /path/to/repo/examples/claude-code/cred-gateway/gateway.d/github.conf gateway.d/
 ```
 
 Add the mount to the `cred-gateway` service:

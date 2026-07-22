@@ -91,8 +91,8 @@ run_proxy() { # run_proxy <name> <addon-file>...
   return 1
 }
 
-ADDONS=examples/claude-code/addons
-DC_ADDONS=examples/dev-container/.devcontainer/addons
+ADDONS=examples/claude-code/proxy/addons
+DC_ADDONS=examples/dev-container/.devcontainer/proxy/addons
 
 # ------------------------------------------------------------------ anthropic
 

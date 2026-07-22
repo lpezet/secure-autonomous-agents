@@ -31,9 +31,9 @@ probe() { # probe <path> → WRITABLE | read-only
 }
 
 check "project files stay writable" "WRITABLE" "$(probe /workspace/probe)"
-check "addons/ is read-only"       "read-only" "$(probe /workspace/.devcontainer/addons/probe)"
-check "providers/ is read-only"    "read-only" "$(probe /workspace/.devcontainer/providers/probe)"
-check "gateway.d/ is read-only"    "read-only" "$(probe /workspace/.devcontainer/gateway.d/probe)"
+check "addons/ is read-only"       "read-only" "$(probe /workspace/.devcontainer/proxy/addons/probe)"
+check "providers/ is read-only"    "read-only" "$(probe /workspace/.devcontainer/broker/providers/probe)"
+check "gateway.d/ is read-only"    "read-only" "$(probe /workspace/.devcontainer/cred-gateway/gateway.d/probe)"
 check "compose.yaml is read-only"  "read-only" "$(probe /workspace/.devcontainer/compose.yaml)"
 
 suite "existing stack config cannot be modified"
@@ -46,9 +46,9 @@ modify() {
     alpine sh -c "echo x >> '$1'" 2>&1 || true
 }
 check_contains "cannot append to 000_policy.py" \
-  "$(modify /workspace/.devcontainer/addons/000_policy.py)" "Read-only file system"
+  "$(modify /workspace/.devcontainer/proxy/addons/000_policy.py)" "Read-only file system"
 check_contains "cannot append to gateway.d/github.conf" \
-  "$(modify /workspace/.devcontainer/gateway.d/github.conf)" "Read-only file system"
+  "$(modify /workspace/.devcontainer/cred-gateway/gateway.d/github.conf)" "Read-only file system"
 check_contains "cannot append to compose.yaml" \
   "$(modify /workspace/.devcontainer/compose.yaml)" "Read-only file system"
 
@@ -58,6 +58,6 @@ suite "no fixture residue"
 check "no probe files left in the example" "" "$(find "$EX" -name 'probe' -print 2>/dev/null)"
 check "read-only targets were not appended to" "" \
   "$(git diff --stat -- examples/dev-container/.devcontainer/compose.yaml \
-       examples/dev-container/.devcontainer/gateway.d/ | grep -E '^\s*x$' || true)"
+       examples/dev-container/.devcontainer/cred-gateway/gateway.d/ | grep -E '^\s*x$' || true)"
 
 finish

@@ -12,8 +12,8 @@ require_docker
 IMG="sat-test-cred-gateway"
 build_image "$IMG" stack/cred-gateway || exit 1
 
-CC_SNIPPETS="$REPO_ROOT/examples/claude-code/gateway.d"
-DC_SNIPPETS="$REPO_ROOT/examples/dev-container/.devcontainer/gateway.d"
+CC_SNIPPETS="$REPO_ROOT/examples/claude-code/cred-gateway/gateway.d"
+DC_SNIPPETS="$REPO_ROOT/examples/dev-container/.devcontainer/cred-gateway/gateway.d"
 
 # nginx resolves static proxy_pass upstreams at config-parse time, so a
 # standalone `nginx -t` needs `broker` to resolve or it fails before it ever

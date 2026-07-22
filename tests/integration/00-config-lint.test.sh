@@ -7,7 +7,7 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 cd "$REPO_ROOT"
 
-SNIPPETS=(examples/claude-code/gateway.d/*.conf examples/dev-container/.devcontainer/gateway.d/*.conf)
+SNIPPETS=(examples/claude-code/cred-gateway/gateway.d/*.conf examples/dev-container/.devcontainer/cred-gateway/gateway.d/*.conf)
 COMPOSES=(stack/compose.yaml examples/claude-code/compose.yaml examples/dev-container/.devcontainer/compose.yaml)
 
 suite "cred-gateway snippets use exact-match locations"
@@ -105,7 +105,7 @@ suite "github addon does not match github.com"
 # Documented invariant: git push/pull authenticates through the credential
 # helper. Matching github.com here collides with git's Basic auth handshake
 # inside the MITMed tunnel.
-for f in examples/*/addons/010_github.py examples/*/.devcontainer/addons/010_github.py; do
+for f in examples/*/proxy/addons/010_github.py examples/*/.devcontainer/proxy/addons/010_github.py; do
   [ -f "$f" ] || continue
   bad=$(grep -nE '"github\.com"|'\''github\.com'\''' "$f" || true)
   if [ -z "$bad" ]; then ok "$f — matches api./uploads. hosts only"
@@ -114,7 +114,7 @@ done
 
 suite "policy addon loads before provider addons"
 # 000_policy.py must run first; entrypoint.sh globs alphabetically.
-for d in examples/*/addons examples/*/.devcontainer/addons stack/proxy/addons; do
+for d in examples/*/proxy/addons examples/*/.devcontainer/proxy/addons stack/proxy/addons; do
   [ -d "$d" ] || continue
   first=$(ls "$d"/*.py 2>/dev/null | head -1 | xargs -r basename)
   check "$d — first addon is 000_policy.py" "000_policy.py" "$first"
