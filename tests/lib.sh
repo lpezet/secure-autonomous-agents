@@ -62,6 +62,31 @@ check_not_contains() {
   esac
 }
 
+# check_no_secret <label> <haystack> <pattern> [pattern...]
+#
+# Like check_not_contains, but NEVER prints the haystack — the whole point is
+# that it may contain a live credential, and ko() writes its detail argument to
+# the terminal and into any CI log. A failure here reports only which pattern
+# matched and where in the string, which is enough to debug and not enough to
+# steal. Patterns are extended-regex; use them to match a credential's shape
+# (sk-ant-, ghp_) rather than the secret itself.
+#
+# Only ever use this for real credentials. For stubs, check_not_contains gives
+# a far more useful failure message.
+check_no_secret() {
+  local label="$1" hay="$2"; shift 2
+  local pat hit
+  for pat in "$@"; do
+    if hit=$(printf '%s' "$hay" | grep -oaEm1 "$pat" 2>/dev/null) && [ -n "$hit" ]; then
+      # Offset, not content. Length is already implied by the pattern.
+      local before=${hay%%$hit*}
+      ko "$label" "credential-shaped match for /$pat/ at byte ${#before} (${#hit} bytes, not shown)"
+      return 0
+    fi
+  done
+  ok "$label"
+}
+
 suite() { printf '\n%s=== %s ===%s\n' "$_B" "$1" "$_N"; }
 
 # Print summary and exit non-zero if anything failed.
