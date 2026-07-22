@@ -7,7 +7,7 @@
 # Plain HTTP only — testing the HTTPS path would need the generated CA, and the
 # policy addon matches on hostname before any TLS decision is made.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 cd "$REPO_ROOT"
 
 require_docker

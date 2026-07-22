@@ -82,7 +82,7 @@ Everything else returns 403. `/anthropic/key`, `/github/token`, and `/cloudflare
 
 ## Non-obvious invariants
 
-**Never use `flow.request.pretty_host` for a security decision in an addon.** It prefers the client-supplied `Host` header, which the dev container fully controls, while mitmproxy connects to `flow.request.host` (absolute-form URI, CONNECT authority, or TLS SNI). Every addon originally matched `pretty_host`, which meant `curl --proxy http://proxy:8080 -H 'Host: api.anthropic.com' http://my-server/` made the proxy inject the real Anthropic key into a request delivered to `my-server`, and `-H 'Host: anything'` walked `000_policy.py` straight through to `broker:8080/github/token`. Always match on `flow.request.host`. `tests/20`, `tests/25` and `tests/30` cover each addon.
+**Never use `flow.request.pretty_host` for a security decision in an addon.** It prefers the client-supplied `Host` header, which the dev container fully controls, while mitmproxy connects to `flow.request.host` (absolute-form URI, CONNECT authority, or TLS SNI). Every addon originally matched `pretty_host`, which meant `curl --proxy http://proxy:8080 -H 'Host: api.anthropic.com' http://my-server/` made the proxy inject the real Anthropic key into a request delivered to `my-server`, and `-H 'Host: anything'` walked `000_policy.py` straight through to `broker:8080/github/token`. Always match on `flow.request.host`. `tests/integration/20`, `25` and `30` cover each addon.
 
 **`GH_TOKEN=proxy-injected` and `CLOUDFLARE_API_TOKEN=proxy-injected` are dummy values.** They exist to satisfy client-side "am I authenticated?" checks in `gh` and `wrangler`. The proxy strips them at the wire level and injects real tokens. Do not replace them with real values — the whole point is that dev never holds real credentials.
 
@@ -100,7 +100,12 @@ Everything else returns 403. `/anthropic/key`, `/github/token`, and `/cloudflare
 
 ## Tests
 
-`tests/run.sh` — regression suite for the security boundaries. No credentials needed; everything runs against stubs. `tests/00-config-lint.test.sh` needs no docker. See `tests/README.md`.
+Two tiers behind one facade. `tests/run.sh` dispatches to `tests/<tier>/run.sh` and passes the remaining arguments through.
+
+- `tests/integration/` — the security boundaries, against stubs and fixtures. No credentials, free, ~60s. `00-config-lint.test.sh` needs no docker.
+- `tests/e2e/` — the paths a stub cannot reach (HTTPS/CONNECT, CA cert lifecycle, `git push` through the credential helper), against a **dedicated** GitHub App and `~/.config/agent-creds-e2e`. Spends real API quota.
+
+A bare `tests/run.sh` runs integration only — e2e must be asked for by name (`tests/run.sh e2e`, or `all` for both, fail-fast). `lib.sh` and `fixtures/` are shared. See `tests/README.md`.
 
 ## Adding a new credential provider
 

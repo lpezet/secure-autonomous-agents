@@ -1,62 +1,70 @@
 #!/usr/bin/env bash
-# Regression suite runner.
+# Facade over the test tiers. Dispatches to tests/<tier>/run.sh, passing every
+# remaining argument (and the whole environment) through untouched.
 #
-#   tests/run.sh              # everything
-#   tests/run.sh 00 10        # only suites whose filename starts with 00 or 10
-#   FORCE_BUILD=1 tests/run.sh   # rebuild images instead of reusing cached ones
+#   tests/run.sh                     # integration — the safe default
+#   tests/run.sh integration 20 30   # → tests/integration/run.sh 20 30
+#   tests/run.sh e2e                 # → tests/e2e/run.sh
+#   tests/run.sh all                 # both, integration first
 #
-# Exit code is non-zero if any suite fails. No credentials are required: every
-# suite runs against stubs and fixtures.
+# A bare `tests/run.sh` deliberately does NOT run e2e. That tier spends real
+# API quota, mints real tokens and pushes to a real repository, so it has to be
+# something you asked for by name rather than something the obvious command
+# does to you.
+#
+# `all` is fail-fast: if integration is red there is no point paying for e2e,
+# and its failures would most likely be downstream noise anyway.
+#
+# Exit code is non-zero if any tier fails. Tiers print their own summaries;
+# this script aggregates exit codes only.
 set -uo pipefail
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TIERS=(integration e2e)
 
 if [ -t 1 ]; then
-  G=$'\033[32m'; R=$'\033[31m'; B=$'\033[1m'; N=$'\033[0m'
+  R=$'\033[31m'; B=$'\033[1m'; N=$'\033[0m'
 else
-  G=''; R=''; B=''; N=''
+  R=''; B=''; N=''
 fi
 
-files=()
-if [ $# -gt 0 ]; then
-  for pat in "$@"; do
-    for f in "$TESTS_DIR/$pat"*.test.sh; do [ -f "$f" ] && files+=("$f"); done
-  done
-else
-  for f in "$TESTS_DIR"/*.test.sh; do [ -f "$f" ] && files+=("$f"); done
-fi
+usage() {
+  sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+  exit "${1:-0}"
+}
 
-if [ "${#files[@]}" -eq 0 ]; then
-  echo "no test files matched" >&2
-  exit 2
-fi
+# First argument selects the tier, but only if it names one. Anything else is
+# left alone so `tests/run.sh 20` still means "integration, suite 20" — the
+# shorthand that existed before this facade did.
+selected=(integration)
+case "${1-}" in
+  integration|e2e) selected=("$1"); shift ;;
+  all)             selected=("${TIERS[@]}"); shift ;;
+  -h|--help)       usage 0 ;;
+esac
 
-if ! docker version >/dev/null 2>&1; then
-  echo "${R}docker is unavailable.${N} 00-config-lint needs no docker; the rest do." >&2
-  echo "On WSL: Docker Desktop → Settings → Resources → WSL Integration." >&2
-fi
+run_tier() { # run_tier <name> [args...]
+  local tier="$1"; shift
+  local script="$TESTS_DIR/$tier/run.sh"
+  if [ ! -x "$script" ] && [ ! -f "$script" ]; then
+    printf '%sno such tier: %s%s (expected %s)\n' "$R" "$tier" "$N" "$script" >&2
+    return 2
+  fi
+  printf '\n%s╔══ %s ══╗%s\n' "$B" "$tier" "$N"
+  bash "$script" "$@"
+}
 
 failed=()
-started=$SECONDS
-
-for f in "${files[@]}"; do
-  name="$(basename "$f" .test.sh)"
-  printf '\n%s┏━ %s %s\n' "$B" "$name" "$N"
-  if bash "$f"; then
-    printf '%s┗━ %s ok%s\n' "$G" "$name" "$N"
-  else
-    rc=$?
-    printf '%s┗━ %s FAILED (exit %d)%s\n' "$R" "$name" "$rc" "$N"
-    failed+=("$name")
+for tier in "${selected[@]}"; do
+  if ! run_tier "$tier" "$@"; then
+    failed+=("$tier")
+    # Fail fast: never spend real credentials to re-discover a failure the
+    # free tier already found.
+    [ "${#selected[@]}" -gt 1 ] && break
   fi
 done
 
-elapsed=$((SECONDS - started))
-printf '\n%s────────────────────────────%s\n' "$B" "$N"
-printf 'ran %d suite(s) in %ds\n' "${#files[@]}" "$elapsed"
-
 if [ "${#failed[@]}" -gt 0 ]; then
-  printf '%sfailed: %s%s\n' "$R" "${failed[*]}" "$N"
+  printf '\n%stier(s) failed: %s%s\n' "$R" "${failed[*]}" "$N" >&2
   exit 1
 fi
-printf '%sall suites passed%s\n' "$G" "$N"

@@ -5,7 +5,7 @@
 # "BROKER-HIT <uri>", so each assertion distinguishes "reached the broker" from
 # "denied by the gateway" with no real credentials involved.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 cd "$REPO_ROOT"
 
 require_docker

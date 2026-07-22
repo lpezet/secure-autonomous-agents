@@ -4,7 +4,7 @@
 # hurry and expensive to notice: a prefix-match location, a real credential
 # pasted into a compose file, an addon widened to match github.com.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 cd "$REPO_ROOT"
 
 SNIPPETS=(examples/claude-code/gateway.d/*.conf examples/dev-container/.devcontainer/gateway.d/*.conf)
@@ -12,7 +12,7 @@ COMPOSES=(stack/compose.yaml examples/claude-code/compose.yaml examples/dev-cont
 
 suite "cred-gateway snippets use exact-match locations"
 # A prefix match like `location /github/` exposes every broker route under it,
-# including /github/token. tests/10 proves that leak is real.
+# including /github/token. tests/integration/10 proves that leak is real.
 for f in "${SNIPPETS[@]}"; do
   bad=$(grep -nE '^[[:space:]]*location[[:space:]]+[^=]' "$f" || true)
   if [ -z "$bad" ]; then ok "$f — all locations exact-match"
@@ -66,7 +66,7 @@ done
 suite "dev-container shadows .devcontainer as read-only"
 # This example mounts ../ (the parent of .devcontainer) read-write at
 # /workspace, so without the nested mount the agent can rewrite addons/,
-# providers/ and gateway.d/ and wait for a restart. tests/50 proves the
+# providers/ and gateway.d/ and wait for a restart. tests/integration/50 proves the
 # shadow works at runtime.
 c=examples/dev-container/.devcontainer/compose.yaml
 if grep -q '\.\./\.devcontainer:/workspace/\.devcontainer:ro' "$c"; then
@@ -96,7 +96,7 @@ suite "no credential material committed"
 # trip the check while a real key still would.
 for pat in 'sk-ant-[A-Za-z0-9_-]{20,}' 'ghp_[A-Za-z0-9]{20,}' 'github_pat_[A-Za-z0-9_]{20,}' \
            'BEGIN RSA PRIVATE KEY' 'BEGIN PRIVATE KEY' 'BEGIN OPENSSH PRIVATE KEY'; do
-  hits=$(git grep -lE "$pat" -- . ':!tests/00-config-lint.test.sh' 2>/dev/null || true)
+  hits=$(git grep -lE "$pat" -- . ':!tests/integration/00-config-lint.test.sh' 2>/dev/null || true)
   if [ -z "$hits" ]; then ok "no match for /$pat/"
   else ko "credential-shaped string committed: /$pat/" "$hits"; fi
 done

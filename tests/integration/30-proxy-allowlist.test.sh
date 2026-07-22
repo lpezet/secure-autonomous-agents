@@ -3,7 +3,7 @@
 # behaviour, so the stack works before anyone writes an allowlist). Present
 # file → default-deny with per-domain method restrictions.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 cd "$REPO_ROOT"
 
 require_docker

@@ -3,7 +3,7 @@
 # than the real ones, so no credentials are needed and the test does not make
 # outbound calls to GitHub or Cloudflare.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 cd "$REPO_ROOT"
 
 require_docker

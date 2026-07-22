@@ -10,7 +10,7 @@
 #
 # Replays the mount arguments exactly as declared in that example's compose.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 cd "$REPO_ROOT"
 
 require_docker

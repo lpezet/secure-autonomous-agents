@@ -19,7 +19,7 @@
 # A stub broker stands in for the real one and hands out obviously fake
 # credentials, so a leak shows up as a marker string rather than a real key.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 cd "$REPO_ROOT"
 
 require_docker
