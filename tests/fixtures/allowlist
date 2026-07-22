@@ -1,0 +1,5 @@
+# Fixture allowlist for tests/30-proxy-allowlist.test.sh
+readonly-api            # trailing comment; defaults to GET,HEAD,OPTIONS
+write-api GET,POST
+anything-api *
+*.cdn.test GET
