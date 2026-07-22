@@ -5,7 +5,7 @@ services:
     build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/broker
     volumes:
       - ${HOME}/.config/agent-creds:/secrets:ro
-      - ./broker/providers:/app/providers:ro
+      - ./broker:/app/providers:ro
     env_file: .env
     environment:
       GITHUB_APP_PRIVATE_KEY_PATH: /secrets/github-app.pem
@@ -30,7 +30,7 @@ services:
       broker:
         condition: service_healthy
     volumes:
-      - ./proxy/addons:/addons:ro
+      - ./proxy:/addons:ro
       - proxy-certs:/home/mitmproxy/.mitmproxy
     environment:
       BROKER_URL: http://broker:8080
@@ -55,7 +55,7 @@ services:
     volumes:
       # Whitelisted endpoints. Host path only — must stay outside whatever
       # is mounted at /workspace in dev, or the agent could widen it.
-      - ./cred-gateway/gateway.d:/etc/nginx/gateway.d:ro
+      - ./cred-gateway:/etc/nginx/gateway.d:ro
     networks: [secure, dev]
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]

@@ -23,16 +23,25 @@ A Docker setup to run autonomous agents/harness (e.g. Claude Code) without expos
 
 The broker is on `secure` only. Docker DNS will not resolve `broker` from within the dev container, and there is no route even if it did. The only broker-adjacent surface reachable from dev is the two nginx-whitelisted paths on cred-gateway.
 
-**Examples mirror `stack/` layout: one directory per service, named after the service.**
+**One directory per service, named after the service — in both `stack/` and `examples/`.**
 
 ```
-stack/broker/providers/          examples/*/broker/providers/         *.js
-stack/proxy/addons/              examples/*/proxy/addons/             *.py
-stack/cred-gateway/gateway.d/    examples/*/cred-gateway/gateway.d/   *.conf
-stack/dev/                       examples/*/dev/                      Dockerfile
+                      stack/ (builds the image)      examples/ (supplies content)
+broker         →      broker/providers/*.js          broker/*.js
+proxy          →      proxy/addons/*.py              proxy/*.py
+cred-gateway   →      cred-gateway/gateway.d/*.conf  cred-gateway/*.conf
+dev            →      dev/Dockerfile                 dev/Dockerfile
 ```
 
-So the mount lines are identical in both, and which service owns a directory is answered by its name rather than by knowing that addons are a mitmproxy concept and providers a broker one. Keep new content under the service that consumes it.
+`stack/` needs the extra `providers/` / `addons/` / `gateway.d/` level because those directories sit alongside the image's own files — `stack/broker/` also holds `Dockerfile`, `server.js`, `package.json`. An example's service directory holds nothing but the mounted content, so the level would be pure ceremony; the mount says where it lands:
+
+```yaml
+- ./broker:/app/providers:ro
+- ./proxy:/addons:ro
+- ./cred-gateway:/etc/nginx/gateway.d:ro
+```
+
+Which service owns a file is answered by the directory name, rather than by knowing that addons are a mitmproxy concept and providers a broker one. Keep new content under the service that consumes it.
 
 ### broker (`stack/broker/`)
 
@@ -68,7 +77,7 @@ nginx image built from `stack/cred-gateway/Dockerfile` — the `nginx.conf` is b
 
 The base image ships **no** provider endpoints: `/healthz`, then `include /etc/nginx/gateway.d/*.conf`, then `location / { return 403; }`. Whitelisted endpoints come from a bind-mounted directory of snippets, mirroring how the broker gets `/app/providers` and the proxy gets `/addons` — base image is mechanism, the deployment supplies content. `stack/cred-gateway/gateway.d/` is empty (like `stack/broker/providers/`) and holds the authoring rules in its README.
 
-Both examples vendor `cred-gateway/gateway.d/github.conf`, the counterpart to their `proxy/addons/010_github.py` and `broker/providers/github.js`:
+Both examples vendor `cred-gateway/github.conf`, the counterpart to their `proxy/010_github.py` and `broker/github.js`:
 - `GET /github/credential` — proxies to `broker:8080/github/credential`
 - `GET /github/identity` — proxies to `broker:8080/github/identity`
 

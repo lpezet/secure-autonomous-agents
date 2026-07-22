@@ -76,7 +76,7 @@ git's `username=x-access-token\npassword=<token>` format.
 
 cred-gateway (nginx) sits on both networks and acts as the narrow bridge. It denies everything
 by default; whitelisted endpoints come from `*.conf` snippets bind-mounted at
-`/etc/nginx/gateway.d` (see `examples/*/cred-gateway/gateway.d/github.conf`), which expose only
+`/etc/nginx/gateway.d` (see `examples/*/cred-gateway/github.conf`), which expose only
 `/github/credential` and `/github/identity`, proxying those through to the broker on `secure`.
 Raw credential endpoints (`/anthropic/key`, `/github/token`) have no snippet and return 403 —
 exposing them would let the dev container exfiltrate real secrets directly.
@@ -120,25 +120,24 @@ See [`examples/claude-code/README.md`](examples/claude-code/README.md) for full 
 
 ### Adding a credential provider
 
-Each example is laid out one directory per service, mirroring `stack/`, so content lives under
-whichever service consumes it:
+Each example is one directory per service, holding exactly the files that service loads:
 
 ```
 examples/claude-code/
-  broker/providers/        *.js    → /app/providers
-  proxy/addons/            *.py    → /addons
-  cred-gateway/gateway.d/  *.conf  → /etc/nginx/gateway.d
-  dev/                     Dockerfile + setup scripts
+  broker/        *.js    → /app/providers
+  proxy/         *.py    → /addons
+  cred-gateway/  *.conf  → /etc/nginx/gateway.d
+  dev/           Dockerfile + setup scripts
   compose.yaml
 ```
 
-1. Drop a provider file in `broker/providers/` following the existing pattern.
+1. Drop a provider file in `broker/` following the existing pattern.
    Restart the broker to pick it up — no image rebuild needed.
-2. Add a numbered addon in `proxy/addons/` following `020_anthropic.py` or
+2. Add a numbered addon in `proxy/` following `020_anthropic.py` or
    `030_cloudflare.py`. Restart the proxy — `entrypoint.sh` auto-discovers `*.py` files at
    startup.
-3. Only if a dev-side tool must hold the credential locally, add a `cred-gateway/gateway.d/`
-   snippet exposing it. If the credential is only ever spent on an outbound API call, skip this
+3. Only if a dev-side tool must hold the credential locally, add a `cred-gateway/` snippet
+   exposing it. If the credential is only ever spent on an outbound API call, skip this
    — that is the difference between the agent never seeing a secret and it holding one.
 4. Add a smoke-test assertion verifying injection works and the broker endpoint is unreachable
    from the dev container, plus coverage in `tests/` — at minimum a spoofed-`Host` case.

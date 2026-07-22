@@ -7,7 +7,7 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 cd "$REPO_ROOT"
 
-SNIPPETS=(examples/claude-code/cred-gateway/gateway.d/*.conf examples/dev-container/.devcontainer/cred-gateway/gateway.d/*.conf)
+SNIPPETS=(examples/claude-code/cred-gateway/*.conf examples/dev-container/.devcontainer/cred-gateway/*.conf)
 COMPOSES=(stack/compose.yaml examples/claude-code/compose.yaml examples/dev-container/.devcontainer/compose.yaml)
 
 suite "cred-gateway snippets use exact-match locations"
@@ -54,19 +54,22 @@ else
   ko "base nginx.conf default-deny missing" "location / { return 403; } is the backstop"
 fi
 
-suite "each example mounts its gateway.d read-only"
+suite "each example mounts its snippets read-only"
+# Matches the container target and :ro, not the host directory name — the
+# source path is the deployment's to choose, and pinning it here made this
+# fail on a pure rename rather than on anything that weakened the boundary.
 for c in examples/claude-code/compose.yaml examples/dev-container/.devcontainer/compose.yaml; do
-  if grep -q 'gateway.d:/etc/nginx/gateway.d:ro' "$c"; then
-    ok "$c — gateway.d mounted read-only"
+  if grep -qE ':/etc/nginx/gateway\.d:ro( |$)' "$c"; then
+    ok "$c — snippets mounted read-only at /etc/nginx/gateway.d"
   else
-    ko "$c — gateway.d mount missing or writable" "snippets are the whitelist; dev must not be able to edit them"
+    ko "$c — snippet mount missing or writable" "snippets are the whitelist; dev must not be able to edit them"
   fi
 done
 
 suite "dev-container shadows .devcontainer as read-only"
 # This example mounts ../ (the parent of .devcontainer) read-write at
-# /workspace, so without the nested mount the agent can rewrite addons/,
-# providers/ and gateway.d/ and wait for a restart. tests/integration/50 proves the
+# /workspace, so without the nested mount the agent can rewrite proxy/,
+# broker/ and cred-gateway/ and wait for a restart. tests/integration/50 proves the
 # shadow works at runtime.
 c=examples/dev-container/.devcontainer/compose.yaml
 if grep -q '\.\./\.devcontainer:/workspace/\.devcontainer:ro' "$c"; then
@@ -105,7 +108,7 @@ suite "github addon does not match github.com"
 # Documented invariant: git push/pull authenticates through the credential
 # helper. Matching github.com here collides with git's Basic auth handshake
 # inside the MITMed tunnel.
-for f in examples/*/proxy/addons/010_github.py examples/*/.devcontainer/proxy/addons/010_github.py; do
+for f in examples/*/proxy/010_github.py examples/*/.devcontainer/proxy/010_github.py; do
   [ -f "$f" ] || continue
   bad=$(grep -nE '"github\.com"|'\''github\.com'\''' "$f" || true)
   if [ -z "$bad" ]; then ok "$f — matches api./uploads. hosts only"
@@ -114,7 +117,7 @@ done
 
 suite "policy addon loads before provider addons"
 # 000_policy.py must run first; entrypoint.sh globs alphabetically.
-for d in examples/*/proxy/addons examples/*/.devcontainer/proxy/addons stack/proxy/addons; do
+for d in examples/*/proxy examples/*/.devcontainer/proxy stack/proxy/addons; do
   [ -d "$d" ] || continue
   first=$(ls "$d"/*.py 2>/dev/null | head -1 | xargs -r basename)
   check "$d — first addon is 000_policy.py" "000_policy.py" "$first"

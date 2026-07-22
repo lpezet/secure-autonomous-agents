@@ -6,14 +6,14 @@ The base broker image ships no credential routes — `server.js` loads every
 with nothing mounted answers `404` on every credential path and `200` only on
 `/healthz`.
 
-Working references, both in `examples/claude-code/broker/providers/`:
+Working references, both in `examples/claude-code/broker/`:
 
-- [`github.js`](../../../examples/claude-code/broker/providers/github.js) — mints an
+- [`github.js`](../../../examples/claude-code/broker/github.js) — mints an
   installation token from the App private key, caches it with a 5-minute safety
   window, and exposes it in three shapes: raw (`/github/token`, proxy only),
   `git credential` format (`/github/credential`), and identity for
   `git config` (`/github/identity`).
-- [`anthropic.js`](../../../examples/claude-code/broker/providers/anthropic.js) — the
+- [`anthropic.js`](../../../examples/claude-code/broker/anthropic.js) — the
   minimal case: read a credential from the environment, hand it to the proxy.
 
 Wire it up in compose:

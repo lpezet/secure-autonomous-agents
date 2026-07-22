@@ -20,7 +20,7 @@ services:
     volumes:
       # Dedicated creds directory — never the one a real agent uses. See README.
       - ${AGENT_CREDS_DIR:?set AGENT_CREDS_DIR (tests/e2e/run.sh does this)}:/secrets:ro
-      - ../../examples/claude-code/broker/providers:/app/providers:ro
+      - ../../examples/claude-code/broker:/app/providers:ro
     env_file: .env
     environment:
       GITHUB_APP_PRIVATE_KEY_PATH: /secrets/github-app.pem
@@ -44,7 +44,7 @@ services:
       broker:
         condition: service_healthy
     volumes:
-      - ../../examples/claude-code/proxy/addons:/addons:ro
+      - ../../examples/claude-code/proxy:/addons:ro
       - proxy-certs:/home/mitmproxy/.mitmproxy
     environment:
       BROKER_URL: http://broker:8080
@@ -64,7 +64,7 @@ services:
       broker:
         condition: service_healthy
     volumes:
-      - ../../examples/claude-code/cred-gateway/gateway.d:/etc/nginx/gateway.d:ro
+      - ../../examples/claude-code/cred-gateway:/etc/nginx/gateway.d:ro
     networks: [secure, dev]
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]

@@ -44,8 +44,7 @@ the claimed host, so a request merely *labelled* internal is refused too.
 **Fixed: the dev container could rewrite the stack's own configuration**
 (`examples/dev-container`). That example mounts `../` — the parent of
 `.devcontainer` — read-write at `/workspace`, so the agent could edit
-`proxy/addons/`, `broker/providers/`, `cred-gateway/gateway.d/` and
-`compose.yaml`: neuter the policy
+`proxy/`, `broker/`, `cred-gateway/` and `compose.yaml`: neuter the policy
 addon, add a prefix-match location exposing `/github/token`, or point a
 provider at a host it controls. It could not restart the containers itself, but
 the edit persisted and took effect the next time a human did. A nested
@@ -78,19 +77,19 @@ than failing.
 **`CLAUDE_VERSION` build arg** in the same example pins or refreshes the Claude
 Code install without busting the apt/node/bun layers.
 
-**Both examples are laid out one directory per service**, mirroring `stack/`:
+**Both examples are laid out one directory per service:**
 
 ```
-addons/      →  proxy/addons/
-providers/   →  broker/providers/
-gateway.d/   →  cred-gateway/gateway.d/
-dev/            (unchanged)
+addons/     *.py    →  proxy/         mounted at /addons
+providers/  *.js    →  broker/        mounted at /app/providers
+gateway.d/  *.conf  →  cred-gateway/  mounted at /etc/nginx/gateway.d
+dev/                   (unchanged)
 ```
 
 Contents are untouched — this is purely a move. Previously you had to know that
-addons are a mitmproxy concept and providers a broker one to tell which
-directory belonged to which service; now the name answers it. The mount lines
-also become identical to `stack/compose.yaml`, so the two are diffable.
+addons are a mitmproxy concept and providers a broker one to work out which
+directory fed which service; now the directory is named after the service and
+holds nothing but the files that service loads.
 
 Nothing breaks for an existing deployment: you own your `compose.yaml` and it
 keeps pointing wherever it already points. It matters only when you re-copy
@@ -107,7 +106,7 @@ from an example or follow the docs, which now use the new paths.
 - **`stack/cred-gateway/gateway.d/README.md`** and
   **`stack/broker/providers/README.md`** — authoring rules for the two content
   seams, and an explicit statement that both directories are empty by design.
-- Reference `cred-gateway/gateway.d/github.conf` vendored into both examples.
+- Reference `cred-gateway/github.conf` vendored into both examples.
 - `stack/compose.yaml` now says up front that it is a reference skeleton with
   empty provider and gateway mounts, so it will not serve credentials as-is.
   It never did; it just did not say so.
@@ -140,9 +139,9 @@ Copy the fixed addons over your own:
 ```bash
 # from a fresh checkout of this repo at v1.0.0.
 # Note the source path: examples moved to one directory per service in 1.0.0,
-# so addons now live under proxy/. Your own deployment can keep whatever
+# so addons now live directly in proxy/. Your own deployment can keep whatever
 # layout it already has — only the source of the copy changed.
-cp examples/claude-code/proxy/addons/*.py /path/to/your/deployment/addons/
+cp examples/claude-code/proxy/*.py /path/to/your/deployment/addons/
 ```
 
 If you have written your own addons, the fix is one line each — every host
@@ -172,12 +171,11 @@ nginx anywhere.
 
 Create the directory next to your `compose.yaml` and copy the reference
 snippet. The path is yours to choose — this matches the one-directory-per-
-service layout the examples now use, so your tree stays diffable against them:
+service layout the examples now use, so your tree stays comparable to them:
 
 ```bash
-mkdir -p cred-gateway/gateway.d
-cp /path/to/repo/examples/claude-code/cred-gateway/gateway.d/github.conf \
-   cred-gateway/gateway.d/
+mkdir -p cred-gateway
+cp /path/to/repo/examples/claude-code/cred-gateway/github.conf cred-gateway/
 ```
 
 Add the mount to the `cred-gateway` service:
@@ -185,7 +183,7 @@ Add the mount to the `cred-gateway` service:
 ```yaml
   cred-gateway:
     volumes:
-      - ./cred-gateway/gateway.d:/etc/nginx/gateway.d:ro
+      - ./cred-gateway:/etc/nginx/gateway.d:ro
 ```
 
 Two rules when writing your own snippets — both are checked by

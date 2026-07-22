@@ -5,7 +5,7 @@ cred-gateway image ships no provider endpoints — it serves `/healthz` and deni
 everything else. Deployments supply the whitelist by bind-mounting a directory
 of `*.conf` snippets here.
 
-Working reference: [`examples/claude-code/cred-gateway/gateway.d/github.conf`](../../../examples/claude-code/cred-gateway/gateway.d/github.conf)
+Working reference: [`examples/claude-code/cred-gateway/github.conf`](../../../examples/claude-code/cred-gateway/github.conf)
 — the git credential-helper and identity endpoints, counterpart to that example's
 `addons/010_github.py` and `providers/github.js`.
 
@@ -45,7 +45,7 @@ docker compose -f compose.yaml up -d --force-recreate cred-gateway
   ```bash
   docker build -t test-cred-gateway stack/cred-gateway
   docker run --rm --add-host broker:127.0.0.1 \
-    -v "$PWD/examples/claude-code/cred-gateway/gateway.d:/etc/nginx/gateway.d:ro" \
+    -v "$PWD/examples/claude-code/cred-gateway:/etc/nginx/gateway.d:ro" \
     test-cred-gateway nginx -t
   ```
   Same reason cred-gateway needs `depends_on: broker: condition: service_healthy`
