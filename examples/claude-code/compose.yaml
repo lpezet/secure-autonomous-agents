@@ -62,7 +62,10 @@ services:
     restart: unless-stopped
 
   dev:
-    build: ./dev
+    build:
+      context: ./dev
+      args:
+        CLAUDE_VERSION: ${CLAUDE_VERSION:-latest}
     depends_on:
       proxy:
         condition: service_healthy
