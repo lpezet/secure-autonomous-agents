@@ -27,8 +27,9 @@ paying for e2e.
 
 ## Shared code
 
-`lib.sh` holds the assertions (`check`, `check_contains`, `check_not_contains`,
-`ok`, `ko`, `skip`, `suite`, `finish`) and the docker helpers (`net_up`,
+`lib.sh` holds the assertions (`check`, `check_ne`, `check_contains`,
+`check_not_contains`, `check_no_secret`, `ok`, `ko`, `skip`, `suite`,
+`finish`) and the docker helpers (`net_up`,
 `curl_up`, `stub_broker_up`, `http_code`, `http_body`, `wait_http`,
 `build_image`, `track_container`). Both tiers source it; `fixtures/` is shared
 the same way.

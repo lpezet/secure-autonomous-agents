@@ -46,6 +46,14 @@ check() {
   if [ "$2" = "$3" ]; then ok "$1"; else ko "$1" "expected: $2 | actual: $3"; fi
 }
 
+# check_ne <label> <unwanted> <actual>
+# For assertions where one specific answer is wrong and the rest are all fine —
+# e.g. "the gateway does not 403 this path", which must not start failing just
+# because the broker behind it is unhealthy.
+check_ne() {
+  if [ "$2" != "$3" ]; then ok "$1"; else ko "$1" "expected anything but: $2"; fi
+}
+
 # check_contains <label> <haystack> <needle>
 check_contains() {
   case "$2" in
