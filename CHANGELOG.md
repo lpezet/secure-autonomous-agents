@@ -44,7 +44,8 @@ the claimed host, so a request merely *labelled* internal is refused too.
 **Fixed: the dev container could rewrite the stack's own configuration**
 (`examples/dev-container`). That example mounts `../` — the parent of
 `.devcontainer` — read-write at `/workspace`, so the agent could edit
-`addons/`, `providers/`, `gateway.d/` and `compose.yaml`: neuter the policy
+`proxy/addons/`, `broker/providers/`, `cred-gateway/gateway.d/` and
+`compose.yaml`: neuter the policy
 addon, add a prefix-match location exposing `/github/token`, or point a
 provider at a host it controls. It could not restart the containers itself, but
 the edit persisted and took effect the next time a human did. A nested
@@ -106,7 +107,7 @@ from an example or follow the docs, which now use the new paths.
 - **`stack/cred-gateway/gateway.d/README.md`** and
   **`stack/broker/providers/README.md`** — authoring rules for the two content
   seams, and an explicit statement that both directories are empty by design.
-- Reference `gateway.d/github.conf` vendored into both examples.
+- Reference `cred-gateway/gateway.d/github.conf` vendored into both examples.
 - `stack/compose.yaml` now says up front that it is a reference skeleton with
   empty provider and gateway mounts, so it will not serve credentials as-is.
   It never did; it just did not say so.
@@ -170,11 +171,13 @@ nothing, and pushes fail with an authentication error that does not mention
 nginx anywhere.
 
 Create the directory next to your `compose.yaml` and copy the reference
-snippet:
+snippet. The path is yours to choose — this matches the one-directory-per-
+service layout the examples now use, so your tree stays diffable against them:
 
 ```bash
-mkdir -p gateway.d
-cp /path/to/repo/examples/claude-code/cred-gateway/gateway.d/github.conf gateway.d/
+mkdir -p cred-gateway/gateway.d
+cp /path/to/repo/examples/claude-code/cred-gateway/gateway.d/github.conf \
+   cred-gateway/gateway.d/
 ```
 
 Add the mount to the `cred-gateway` service:
@@ -182,7 +185,7 @@ Add the mount to the `cred-gateway` service:
 ```yaml
   cred-gateway:
     volumes:
-      - ./gateway.d:/etc/nginx/gateway.d:ro
+      - ./cred-gateway/gateway.d:/etc/nginx/gateway.d:ro
 ```
 
 Two rules when writing your own snippets — both are checked by
