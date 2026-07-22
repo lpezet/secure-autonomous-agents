@@ -69,10 +69,12 @@ Instead, git is configured with a credential helper: `curl http://cred-gateway/g
 This is a direct HTTP call from the dev container (not proxied) that returns the token in
 git's `username=x-access-token\npassword=<token>` format.
 
-cred-gateway (nginx) sits on both networks and acts as the narrow bridge: it exposes only
-`/github/credential` and `/github/identity` to the dev container, proxying those through to
-the broker on `secure`. Raw credential endpoints (`/anthropic/key`, `/github/token`) return
-403 — exposing them would let the dev container exfiltrate real secrets directly.
+cred-gateway (nginx) sits on both networks and acts as the narrow bridge. It denies everything
+by default; whitelisted endpoints come from `*.conf` snippets bind-mounted at
+`/etc/nginx/gateway.d` (see `examples/*/gateway.d/github.conf`), which expose only
+`/github/credential` and `/github/identity`, proxying those through to the broker on `secure`.
+Raw credential endpoints (`/anthropic/key`, `/github/token`) have no snippet and return 403 —
+exposing them would let the dev container exfiltrate real secrets directly.
 
 In short: the **proxy** handles API traffic via token injection; **cred-gateway** handles git's
 credential helper via a tightly scoped nginx whitelist.

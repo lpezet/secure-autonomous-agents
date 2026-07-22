@@ -56,6 +56,10 @@ services:
     depends_on:
       broker:
         condition: service_healthy
+    volumes:
+      # Extra whitelisted endpoints for custom providers. Host path only —
+      # must not be visible to the dev container.
+      - ./cred-gateway/gateway.d:/etc/nginx/gateway.d:ro
     networks: [secure, dev]
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]

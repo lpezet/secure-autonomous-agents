@@ -54,6 +54,10 @@ services:
     depends_on:
       broker:
         condition: service_healthy
+    volumes:
+      # Whitelisted endpoints. Host path only — must stay outside whatever
+      # is mounted at /workspace in dev, or the agent could widen it.
+      - ./gateway.d:/etc/nginx/gateway.d:ro
     networks: [secure, dev]
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]
@@ -72,6 +76,12 @@ services:
         condition: service_healthy
     volumes:
       - ../:/workspace:cached
+      # The workspace mount above is the parent of .devcontainer, so without
+      # this the agent could edit addons/, providers/ and gateway.d/ — i.e.
+      # widen the proxy allowlist or the cred-gateway whitelist and wait for
+      # a restart. Nested mounts win over their parent, so this shadows the
+      # whole stack config as read-only while leaving the project writable.
+      - ../.devcontainer:/workspace/.devcontainer:ro
       - proxy-certs:/proxy-certs:ro
     environment:
       HTTP_PROXY: http://proxy:8080

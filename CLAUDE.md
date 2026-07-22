@@ -53,9 +53,15 @@ All addons cache credentials with a 5-minute TTL (`cachetools.TTLCache`). A 401 
 
 ### cred-gateway (`stack/cred-gateway/`)
 
-nginx image built from `stack/cred-gateway/Dockerfile` — the `nginx.conf` is baked into the image at build time (not bind-mounted). This prevents runtime config substitution. Two whitelisted paths:
+nginx image built from `stack/cred-gateway/Dockerfile` — the `nginx.conf` is baked into the image at build time (not bind-mounted). This prevents runtime config substitution.
+
+The base image ships **no** provider endpoints: `/healthz`, then `include /etc/nginx/gateway.d/*.conf`, then `location / { return 403; }`. Whitelisted endpoints come from a bind-mounted directory of snippets, mirroring how the broker gets `/app/providers` and the proxy gets `/addons` — base image is mechanism, the deployment supplies content. `stack/cred-gateway/gateway.d/` is empty (like `stack/broker/providers/`) and holds the authoring rules in its README.
+
+Both examples vendor `gateway.d/github.conf`, the counterpart to their `addons/010_github.py` and `providers/github.js`:
 - `GET /github/credential` — proxies to `broker:8080/github/credential`
 - `GET /github/identity` — proxies to `broker:8080/github/identity`
+
+Snippets must use exact-match locations (`location = /path`); a prefix match like `location /github/` would expose `/github/token`. The mount source must sit outside whatever is mounted at `/workspace`, or the dev container could widen its own whitelist — `examples/dev-container` mounts `../:/workspace` so it shadows `.devcontainer` with a nested read-only bind to close that.
 
 Everything else returns 403. `/anthropic/key`, `/github/token`, and `/cloudflare/token` are intentionally not exposed — exposing them would allow the dev container to exfiltrate raw credentials.
 

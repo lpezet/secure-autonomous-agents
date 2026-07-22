@@ -52,6 +52,10 @@ services:
     depends_on:
       broker:
         condition: service_healthy
+    volumes:
+      # Whitelisted endpoints. Host path only — must stay outside whatever
+      # is mounted at /workspace in dev, or the agent could widen it.
+      - ./gateway.d:/etc/nginx/gateway.d:ro
     networks: [secure, dev]
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]
