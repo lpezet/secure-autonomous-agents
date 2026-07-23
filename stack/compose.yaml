@@ -1,3 +1,21 @@
+# Reference skeleton — the wiring, not a running deployment.
+#
+# This will NOT work as-is, by design. Three mount points are the seams where
+# a deployment supplies its own content, and all of them are empty here:
+#
+#   ./broker/providers      → /app/providers        (empty)
+#   ./cred-gateway/gateway.d → /etc/nginx/gateway.d (empty)
+#   ./proxy/addons          → /addons               (populated)
+#
+# With no providers the broker answers 404 on every credential route, and with
+# no gateway snippets cred-gateway denies everything but /healthz — so there is
+# no git credential path. That is the same base-is-mechanism split the broker
+# and proxy already use: this file shows how the pieces connect, and you bring
+# the credentials you actually need.
+#
+# For a working stack, start from examples/claude-code or
+# examples/dev-container — both vendor a github.js provider and a github.conf
+# snippet you can copy and extend.
 name: example-of-compose-file
 
 services:
@@ -56,6 +74,10 @@ services:
     depends_on:
       broker:
         condition: service_healthy
+    volumes:
+      # Extra whitelisted endpoints for custom providers. Host path only —
+      # must not be visible to the dev container.
+      - ./cred-gateway/gateway.d:/etc/nginx/gateway.d:ro
     networks: [secure, dev]
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]

@@ -16,7 +16,11 @@ def _get_key():
 
 
 def request(flow: http.HTTPFlow) -> None:
-    if flow.request.pretty_host != "api.anthropic.com":
+    # flow.request.host is the real destination. Do NOT use pretty_host here:
+    # it prefers the client-supplied Host header, so the dev container could
+    # point a request at its own server, spoof the header, and have the real
+    # credential injected into a request that never goes to the vendor.
+    if flow.request.host != "api.anthropic.com":
         return
 
     # Policy: block Admin API from agent context
@@ -41,7 +45,7 @@ def request(flow: http.HTTPFlow) -> None:
 
 def responseheaders(flow: http.HTTPFlow) -> None:
     """Use responseheaders, not response, to avoid buffering streamed bodies."""
-    if flow.request.pretty_host != "api.anthropic.com":
+    if flow.request.host != "api.anthropic.com":
         return
     if "text/event-stream" in flow.response.headers.get("Content-Type", ""):
         flow.response.stream = True

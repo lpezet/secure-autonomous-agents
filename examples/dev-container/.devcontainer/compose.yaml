@@ -2,10 +2,10 @@ name: dev-container-agent
 
 services:
   broker:
-    build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/broker
+    build: https://github.com/lpezet/secure-autonomous-agents.git#v1.0.0:stack/broker
     volumes:
       - ${HOME}/.config/agent-creds:/secrets:ro
-      - ./providers:/app/providers:ro
+      - ./broker:/app/providers:ro
     env_file: .env
     environment:
       GITHUB_APP_PRIVATE_KEY_PATH: /secrets/github-app.pem
@@ -27,12 +27,18 @@ services:
     restart: unless-stopped
 
   proxy:
-    build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/proxy
+    build: https://github.com/lpezet/secure-autonomous-agents.git#v1.0.0:stack/proxy
     depends_on:
       broker:
         condition: service_healthy
     volumes:
-      - ./addons:/addons:ro
+      - ./proxy:/addons:ro
+      # Egress allowlist (opt-in). Copy 001_allowlist.py from stack/proxy/addons
+      # into ./proxy, then uncomment this. Absent file = every destination
+      # permitted, so the mount is what turns it on.
+      # It lives here rather than in ./proxy because that directory is mounted
+      # wholesale as /addons — a non-addon file in it would land there too.
+      # - ./allowlist:/etc/agent-allowlist:ro
       - proxy-certs:/home/mitmproxy/.mitmproxy
     environment:
       BROKER_URL: http://broker:8080
@@ -50,10 +56,14 @@ services:
     restart: unless-stopped
 
   cred-gateway:
-    build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/cred-gateway
+    build: https://github.com/lpezet/secure-autonomous-agents.git#v1.0.0:stack/cred-gateway
     depends_on:
       broker:
         condition: service_healthy
+    volumes:
+      # Whitelisted endpoints. Host path only — must stay outside whatever
+      # is mounted at /workspace in dev, or the agent could widen it.
+      - ./cred-gateway:/etc/nginx/gateway.d:ro
     networks: [secure, dev]
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]
@@ -72,6 +82,12 @@ services:
         condition: service_healthy
     volumes:
       - ../:/workspace:cached
+      # The workspace mount above is the parent of .devcontainer, so without
+      # this the agent could edit addons/, providers/ and gateway.d/ — i.e.
+      # widen the proxy allowlist or the cred-gateway whitelist and wait for
+      # a restart. Nested mounts win over their parent, so this shadows the
+      # whole stack config as read-only while leaving the project writable.
+      - ../.devcontainer:/workspace/.devcontainer:ro
       - proxy-certs:/proxy-certs:ro
     environment:
       HTTP_PROXY: http://proxy:8080

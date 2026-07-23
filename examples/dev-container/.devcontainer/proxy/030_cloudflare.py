@@ -19,7 +19,11 @@ def _get_token(profile: str) -> str:
 
 
 def request(flow: http.HTTPFlow) -> None:
-    if flow.request.pretty_host != "api.cloudflare.com":
+    # flow.request.host is the real destination. Do NOT use pretty_host here:
+    # it prefers the client-supplied Host header, so the dev container could
+    # point a request at its own server, spoof the header, and have the real
+    # credential injected into a request that never goes to the vendor.
+    if flow.request.host != "api.cloudflare.com":
         return
 
     # Allow caller to hint a profile via custom header (stripped before forwarding)

@@ -1,0 +1,123 @@
+# Stack under test for the e2e tier.
+#
+# Deliberately NOT examples/claude-code/compose.yaml, for one reason that
+# matters: that file builds from
+#
+#   build: https://github.com/lpezet/secure-autonomous-agents.git#main:stack/broker
+#
+# so running it would certify whatever is on main, not the tree you are sitting
+# on. Every build here is a local path, so e2e tests the code you are about to
+# ship.
+#
+# The provider/addon/gateway content is mounted straight out of
+# examples/claude-code/ rather than copied, so this exercises the reference
+# implementation the repo actually ships and cannot drift from it.
+name: sat-e2e
+
+services:
+  broker:
+    build: ../../stack/broker
+    volumes:
+      # Dedicated creds directory — never the one a real agent uses. See README.
+      - ${AGENT_CREDS_DIR:?set AGENT_CREDS_DIR (tests/e2e/run.sh does this)}:/secrets:ro
+      - ../../examples/claude-code/broker:/app/providers:ro
+    env_file: .env
+    environment:
+      GITHUB_APP_PRIVATE_KEY_PATH: /secrets/github-app.pem
+    networks: [secure]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:8080/healthz', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  proxy:
+    build: ../../stack/proxy
+    depends_on:
+      broker:
+        condition: service_healthy
+    volumes:
+      - ../../examples/claude-code/proxy:/addons:ro
+      - proxy-certs:/home/mitmproxy/.mitmproxy
+    environment:
+      BROKER_URL: http://broker:8080
+      PYTHONUNBUFFERED: "1"
+    networks: [secure, dev]
+    healthcheck:
+      test:
+        ["CMD-SHELL", "test -f /home/mitmproxy/.mitmproxy/mitmproxy-ca-cert.pem"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 5s
+
+  cred-gateway:
+    build: ../../stack/cred-gateway
+    depends_on:
+      broker:
+        condition: service_healthy
+    volumes:
+      - ../../examples/claude-code/cred-gateway:/etc/nginx/gateway.d:ro
+    networks: [secure, dev]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+
+  # Exfiltration target. Reflects the request headers so a test can see exactly
+  # what the proxy sent and to whom. `attacker-host` is the name a leak test
+  # aims at while claiming to be a vendor in the Host header.
+  echo:
+    image: nginx:alpine
+    volumes:
+      - ./echo.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      dev:
+        aliases: [attacker-host]
+
+  dev:
+    build: ./dev
+    depends_on:
+      proxy:
+        condition: service_healthy
+      cred-gateway:
+        condition: service_healthy
+      echo:
+        condition: service_started
+    volumes:
+      - proxy-certs:/proxy-certs:ro
+    environment:
+      HTTP_PROXY: http://proxy:8080
+      HTTPS_PROXY: http://proxy:8080
+      NO_PROXY: localhost,127.0.0.1,cred-gateway
+      NODE_EXTRA_CA_CERTS: /proxy-certs/mitmproxy-ca-cert.pem
+      REQUESTS_CA_BUNDLE: /proxy-certs/mitmproxy-ca-cert.pem
+      SSL_CERT_FILE: /proxy-certs/mitmproxy-ca-cert.pem
+      GIT_CREDENTIAL_URL: http://cred-gateway/github/credential
+      GITHUB_IDENTITY_URL: http://cred-gateway/github/identity
+      # Dummy values, exactly as a real dev container has them. If a test ever
+      # sees a real credential in this container, the boundary has failed.
+      ANTHROPIC_API_KEY: proxy-injected
+      GH_TOKEN: proxy-injected
+      E2E_TEST_REPO: ${E2E_TEST_REPO:-}
+    # No devcontainer lifecycle here, so hold the container open ourselves.
+    command: sleep infinity
+    networks: [dev]
+
+networks:
+  secure:
+    driver: bridge
+  dev:
+    driver: bridge
+
+volumes:
+  proxy-certs:

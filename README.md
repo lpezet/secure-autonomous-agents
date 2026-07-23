@@ -11,7 +11,12 @@ stack/          Core reusable infrastructure (broker, proxy, cred-gateway, base 
 examples/
   dev-container/   VS Code dev container — open any repo in a secured workspace
   claude-code/     Claude Code in a secured container — attach and use interactively
+tests/          Regression suite — integration (no credentials) and e2e (real ones)
 ```
+
+**Upgrading from 0.1.0?** See [CHANGELOG.md](CHANGELOG.md). 1.0.0 fixes a
+credential-disclosure bug, and two of the upgrade steps are manual — a
+`docker compose pull` alone leaves you vulnerable and breaks git auth.
 
 Each example's `compose.yaml` builds `broker`, `proxy`, and `cred-gateway` directly from
 this repo's GitHub URL, so you only need the example directory itself to get started.
@@ -69,10 +74,12 @@ Instead, git is configured with a credential helper: `curl http://cred-gateway/g
 This is a direct HTTP call from the dev container (not proxied) that returns the token in
 git's `username=x-access-token\npassword=<token>` format.
 
-cred-gateway (nginx) sits on both networks and acts as the narrow bridge: it exposes only
-`/github/credential` and `/github/identity` to the dev container, proxying those through to
-the broker on `secure`. Raw credential endpoints (`/anthropic/key`, `/github/token`) return
-403 — exposing them would let the dev container exfiltrate real secrets directly.
+cred-gateway (nginx) sits on both networks and acts as the narrow bridge. It denies everything
+by default; whitelisted endpoints come from `*.conf` snippets bind-mounted at
+`/etc/nginx/gateway.d` (see `examples/*/cred-gateway/github.conf`), which expose only
+`/github/credential` and `/github/identity`, proxying those through to the broker on `secure`.
+Raw credential endpoints (`/anthropic/key`, `/github/token`) have no snippet and return 403 —
+exposing them would let the dev container exfiltrate real secrets directly.
 
 In short: the **proxy** handles API traffic via token injection; **cred-gateway** handles git's
 credential helper via a tightly scoped nginx whitelist.
@@ -113,19 +120,57 @@ See [`examples/claude-code/README.md`](examples/claude-code/README.md) for full 
 
 ### Adding a credential provider
 
-1. Drop a provider file in the example's `providers/` directory following the existing pattern.
+Each example is one directory per service, holding exactly the files that service loads:
+
+```
+examples/claude-code/
+  broker/        *.js    → /app/providers
+  proxy/         *.py    → /addons
+  cred-gateway/  *.conf  → /etc/nginx/gateway.d
+  dev/           Dockerfile + setup scripts
+  compose.yaml
+```
+
+1. Drop a provider file in `broker/` following the existing pattern.
    Restart the broker to pick it up — no image rebuild needed.
-2. Add a numbered addon in the example's `addons/` directory following `020_anthropic.py` or
+2. Add a numbered addon in `proxy/` following `020_anthropic.py` or
    `030_cloudflare.py`. Restart the proxy — `entrypoint.sh` auto-discovers `*.py` files at
    startup.
-3. Add a smoke-test assertion verifying injection works and the broker endpoint is unreachable
-   from the dev container.
+3. Only if a dev-side tool must hold the credential locally, add a `cred-gateway/` snippet
+   exposing it. If the credential is only ever spent on an outbound API call, skip this
+   — that is the difference between the agent never seeing a secret and it holding one.
+4. Add a smoke-test assertion verifying injection works and the broker endpoint is unreachable
+   from the dev container, plus coverage in `tests/` — at minimum a spoofed-`Host` case.
 
 ### Proxy allowlist
 
-The proxy can restrict outbound destinations to an explicit allowlist. Uncomment the allowlist
-volume in `compose.yaml` and copy `stack/proxy/allowlist.sample` to `proxy/allowlist/001_allowlist.py`
-(or any numbered `.py` file in that directory). Edit the file to define allowed hostnames.
+The proxy can restrict outbound destinations to an explicit allowlist. It is **off by default**:
+with no allowlist file mounted, every destination is permitted and the proxy logs a warning at
+startup. Turning it on takes two pieces — the addon that enforces it, and the file that lists
+what to permit:
+
+```bash
+cd examples/claude-code
+
+# 1. The addon. Examples do not ship it, since egress control is opt-in.
+cp ../../stack/proxy/addons/001_allowlist.py proxy/
+
+# 2. The list itself — a plain text file of domains, not Python.
+cp ../../stack/proxy/allowlist.sample allowlist
+```
+
+Then uncomment the allowlist volume in that example's `compose.yaml`:
+
+```yaml
+  proxy:
+    volumes:
+      - ./allowlist:/etc/agent-allowlist:ro
+```
+
+The list sits next to `compose.yaml` rather than inside `proxy/`, because `proxy/` is mounted
+wholesale as `/addons` — a non-addon file placed there would be mounted into `/addons` as well.
+
+Edit `allowlist` to define allowed hostnames.
 
 Each line has the form:
 
@@ -154,6 +199,9 @@ uploads.example.com       *
 
 `CONNECT` is always permitted for allowlisted domains — it is required to establish HTTPS
 tunnels. The actual HTTP method is enforced on the inner request inside the tunnel.
+
+Trailing comments are stripped, so `api.example.com  # read only` behaves as `api.example.com`.
+Before 1.0.0 that comment was parsed as the method list and blocked the domain outright.
 
 After editing the allowlist file, restart the proxy to pick up changes:
 ```bash
