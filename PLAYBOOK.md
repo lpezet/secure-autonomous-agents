@@ -70,6 +70,19 @@ the way it is. Read it before changing one.
   that fragment is part of the entry rather than a step in this document.
 - **`/github/identity` is cached for the broker's lifetime**, not on a TTL.
   Restart the broker if the App is renamed.
+- **The audit trail records what an issued token can do**, not only that one
+  was issued: `permissions` (the map of permission name to `read`/`write` the
+  token carries) and `repository_selection` (`all` or `selected`). The App's
+  installation grant is configured in GitHub's web UI, outside this stack —
+  logging its scope is how "what can this lab currently do to GitHub?" becomes
+  a question you answer by reading the trail instead of by opening GitHub
+  settings. Repository *names* are deliberately not logged: `observer` serves
+  the trail over HTTP, and the enum already answers whether the installation
+  is org-wide.
+- **This reports the ceiling; it does not lower it.** Only the deployer knows
+  what scope their task actually needs, and inferring it from what the agent
+  has been reaching for would ratify whatever it did. If the trail shows more
+  authority than you expected, the fix is in GitHub's installation settings.
 
 ### Anthropic (Claude Code)
 

@@ -63,8 +63,8 @@ Route handlers live in `stack/broker/providers/` — one file per credential pro
 
 | Path | Who calls it | Notes |
 |---|---|---|
-| `/github/token` | proxy `010_github.py` | Installation token, cached with 5-min safety window |
-| `/github/credential` | cred-gateway → lab git helper | Same token in `git credential` format |
+| `/github/token` | proxy `010_github.py` | Installation token, cached with 5-min safety window. Audits the scope it carries (`permissions`, `repository_selection`) |
+| `/github/credential` | cred-gateway → lab git helper | Same token in `git credential` format, same scope audited |
 | `/github/identity` | cred-gateway → setup-start.sh | App name+email for `git config`, lifetime-cached |
 | `/anthropic/cred` | proxy `020_anthropic.py` | Returns `{type, value}`; prefers `ANTHROPIC_AUTH_TOKEN_PATH` (OAuth) over `ANTHROPIC_API_KEY_PATH`, read fresh on each uncached call |
 | `/cloudflare/token?profile=` | proxy `030_cloudflare.py` | Mints scoped token via Cloudflare API, cached per profile |
@@ -140,7 +140,9 @@ Runs as root, unlike every other service in this stack. That's deliberate here, 
 
 **`020_anthropic.py` uses `responseheaders`, not `response`** — see `PLAYBOOK.md`'s Anthropic section for why (avoids buffering streamed SSE responses).
 
-**The broker's `identityCache` is lifetime-cached.** If the GitHub App is renamed, restart the broker to refresh it. All other caches are TTL-based (5 minutes).
+**The broker's `identityCache` and `installationScopeCache` are lifetime-cached.** Both describe things only a human changes in GitHub's UI — the App's name, and whether the installation is granted `all` repositories or `selected` ones. Restart the broker to refresh either. All other caches are TTL-based (5 minutes).
+
+**`repository_selection` needs its own API call; `permissions` does not.** `auth({ type: "installation" })` returns `permissions` on the authentication object, so `github.js` gets it free. It does *not* return `repository_selection`, and `repositoryIds`/`repositoryNames` appear only when passed *in* as narrowing options — which the broker does not do. So the installation's repository scope is unknowable from the token itself, and `getInstallationScope()` calls `GET /app/installations/{id}` with the App JWT to get it. Do not "simplify" that away by reading it off the auth object.
 
 **CA cert persistence.** The mitmproxy CA cert lives in the `proxy-certs` named Docker volume, shared between the `proxy` container (where it's generated) and the `lab` container (read-only). The proxy's healthcheck gates on the cert file existing, so `postCreateCommand` cannot race cert generation. Removing the volume forces cert regeneration and requires a container rebuild.
 

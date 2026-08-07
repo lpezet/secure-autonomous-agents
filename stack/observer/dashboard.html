@@ -96,7 +96,17 @@
       ts || "",
       service || "",
       event || "",
-      Object.entries(rest).map(([k, v]) => `${k}=${v}`).join(" "),
+      // Structured values render as JSON, not "[object Object]". github.js
+      // logs `permissions` as a map of permission name to read/write, and a
+      // field that describes an issued token's scope is worth being able to
+      // read. Rendered as text via textContent below, never as markup.
+      Object.entries(rest)
+        .map(([k, v]) =>
+          v !== null && typeof v === "object"
+            ? `${k}=${JSON.stringify(v)}`
+            : `${k}=${v}`,
+        )
+        .join(" "),
     ];
     for (const [i, text] of cells.entries()) {
       const td = document.createElement("td");
