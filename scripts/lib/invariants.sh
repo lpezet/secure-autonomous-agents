@@ -135,6 +135,24 @@ inv_exception_quoted() {
     }' "$1" 2>/dev/null)"
 }
 
+# A request header is written by the lab container. An addon that reads one
+# into a variable is letting the untrusted side steer what happens next — and in
+# a credential-injecting addon, what happens next is which credential gets
+# attached. 030_cloudflare.py shipped exactly this: `X-Cf-Profile` chose the
+# profile, so a ladder of dev/qa/prod profiles was decorative, and the audit
+# line recorded the escalated profile as though it had been authorised.
+#
+# Stripping is not reading. A bare `flow.request.headers.pop("X-Foo", None)` or
+# `del flow.request.headers["Authorization"]` is the correct way to drop a
+# client header and does not match; binding the value to a name does.
+#
+# Same family as inv_pretty_host: both catch a decision made from client-
+# supplied data. This one is the general case, that one the specific host bug.
+inv_header_selector() {
+  _inv_report "$1" "$(_inv_strip_py "$1" \
+    | grep -nE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*flow\.request\.headers\.(get|pop)\(')"
+}
+
 # git push/pull to github.com authenticates through the credential helper, not
 # header injection. Matching it here collides with git's own Basic-auth
 # handshake inside the MITM'd tunnel.
@@ -284,6 +302,7 @@ inv_policy_addon_first() {
 INV_REGISTRY='raw_path_logged|fail|proxy_py|logs a raw request path, query string included
 raw_path_split|fail|proxy_py|splits a raw path on "/", so the last segment holds the query string
 pretty_host|fail|proxy_py|decides on the client-supplied Host header
+header_selector|fail|proxy_py|binds a client-supplied request header to a name the addon acts on
 github_com_matched|fail|proxy_py|matches github.com, which the credential helper owns
 exception_quoted|fail|proxy_py broker_js|audit event quotes an exception beyond .code/.name
 location_prefix|fail|gateway_conf|prefix-match location exposes every route beneath it

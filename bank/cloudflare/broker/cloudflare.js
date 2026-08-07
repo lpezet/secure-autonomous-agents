@@ -5,6 +5,11 @@ const { logEvent } = require("../audit");
 const SAFETY_WINDOW_MS = 5 * 60 * 1000;
 const cloudflareTokenCache = new Map();
 
+// Which profile this deployment issues. Deployment configuration, same value
+// the proxy addon is configured with. The `profile` query param is checked
+// against this rather than trusted — see the route handler.
+const CONFIGURED_PROFILE = process.env.CLOUDFLARE_PROFILE || "workers-deploy";
+
 async function mintCloudflareToken(profile) {
   const cached = cloudflareTokenCache.get(profile);
   if (cached && new Date(cached.expiresAt) - Date.now() > SAFETY_WINDOW_MS) {
@@ -88,19 +93,26 @@ async function mintCloudflareToken(profile) {
 
 module.exports = {
   "/cloudflare/token": async (url, send) => {
-    const profile = url.searchParams.get("profile");
-    if (!profile) {
+    // The param is a cross-check, not an input. Which profile gets minted is
+    // CONFIGURED_PROFILE; a caller asking for a different one is either a
+    // misconfigured proxy or an addon that went back to reading the profile off
+    // a request header, and neither is a reason to mint wider authority. The
+    // addon already ignores the header — this is what still holds if it stops.
+    const requested = url.searchParams.get("profile");
+    if (requested && requested !== CONFIGURED_PROFILE) {
       logEvent("request_rejected", {
         provider: "cloudflare",
-        reason: "missing_profile",
+        reason: "profile_mismatch",
+        requested,
+        configured: CONFIGURED_PROFILE,
       });
-      return send(400, { error: "profile parameter required" });
+      return send(403, { error: "profile not permitted" });
     }
-    const t = await mintCloudflareToken(profile);
+    const t = await mintCloudflareToken(CONFIGURED_PROFILE);
     console.log(
-      `[broker] issued cloudflare token profile=${profile} (expires ${t.expiresAt})`,
+      `[broker] issued cloudflare token profile=${CONFIGURED_PROFILE} (expires ${t.expiresAt})`,
     );
-    logEvent("token_issued", { provider: "cloudflare", profile });
+    logEvent("token_issued", { provider: "cloudflare", profile: CONFIGURED_PROFILE });
     send(200, t);
   },
 };

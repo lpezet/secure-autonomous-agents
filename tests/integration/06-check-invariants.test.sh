@@ -97,6 +97,40 @@ check_contains "prefix-match location" "$out" "prefix-match location"
 check_contains "raw-credential route exposed" "$out" "exposes a raw-credential broker route"
 check_contains "real credential in compose" "$out" "other than the inert placeholder"
 
+suite "an addon steered by a client header is a finding; stripping one is not"
+# The #38 bug, generalised. The lab writes these headers, so binding one to a
+# name lets the untrusted side choose which credential gets attached. The
+# negative case is the load-bearing half: dropping a client header is correct
+# and must stay clean, or the check pushes authors toward not stripping at all.
+d=$(mkdep header-selector)
+cat > "$d/proxy/070_selector.py" <<'PY'
+import audit
+def request(flow):
+    if flow.request.host != "api.example.com":
+        return
+    tier = flow.request.headers.pop("X-Tier", "readonly")
+    flow.request.headers["Authorization"] = "Bearer " + _token(tier)
+PY
+out=$(run "$d")
+check_contains "exits 1" "$out" "EXIT=1"
+check_contains "names the pattern" "$out" "binds a client-supplied request header"
+check_contains "quotes the offending line" "$out" "X-Tier"
+
+d=$(mkdep header-strip)
+cat > "$d/proxy/070_strip.py" <<'PY'
+import audit
+PROFILE = "workers-deploy"
+def request(flow):
+    if flow.request.host != "api.example.com":
+        return
+    flow.request.headers.pop("X-Tier", None)
+    del flow.request.headers["Authorization"]
+    flow.request.headers["Authorization"] = "Bearer " + _token(PROFILE)
+PY
+out=$(run "$d")
+check_contains "dropping a client header stays clean" "$out" "0 fail"
+check_contains "and exits 0" "$out" "EXIT=0"
+
 suite "000_policy.py is exempt from the pretty_host check, and only it"
 # It ORs pretty_host with the real host to widen a block, which is safe. The
 # exemption is positional, so it must not leak to any other file.
@@ -172,7 +206,8 @@ lint="$REPO_ROOT/tests/integration/00-config-lint.test.sh"
 check_contains "the lint sources the library" "$(cat "$lint")" 'scripts/lib/invariants.sh'
 check_contains "the scanner sources the library" "$(cat "$INV_SH")" 'lib/invariants.sh'
 for fn in inv_pretty_host inv_raw_path_logged inv_raw_path_split inv_github_com_matched \
-          inv_exception_quoted inv_location_prefix inv_raw_cred_endpoint inv_real_credential; do
+          inv_exception_quoted inv_location_prefix inv_raw_cred_endpoint inv_real_credential \
+          inv_header_selector; do
   check_contains "lint calls $fn" "$(cat "$lint")" "$fn"
 done
 # The patterns themselves must exist in exactly one place. Prose is fine and

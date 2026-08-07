@@ -13,6 +13,9 @@ services:
       ANTHROPIC_API_KEY_PATH: /secrets/anthropic.key
       ANTHROPIC_AUTH_TOKEN_PATH: /secrets/anthropic-auth.token
       CLOUDFLARE_MINTER_TOKEN_PATH: /secrets/cloudflare-minter.token
+      # Must match the proxy's CLOUDFLARE_PROFILE. The broker mints this profile
+      # and refuses any other, so the lab cannot ask its way into a wider one.
+      CLOUDFLARE_PROFILE: ${CLOUDFLARE_PROFILE:-workers-deploy}
       AUDIT_LOG: /var/log/audit/broker.jsonl
     networks: [secure]
     healthcheck:
@@ -46,6 +49,9 @@ services:
       - audit-logs:/var/log/audit
     environment:
       BROKER_URL: http://broker:8080
+      # Which Cloudflare profile the addon injects for. Deployment config, not
+      # something the lab container may influence — see bank/cloudflare/.
+      CLOUDFLARE_PROFILE: ${CLOUDFLARE_PROFILE:-workers-deploy}
       AUDIT_LOG: /var/log/audit/proxy.jsonl
     networks: [secure, lab]
     healthcheck:

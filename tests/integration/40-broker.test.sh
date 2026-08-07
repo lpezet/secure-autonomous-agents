@@ -49,4 +49,33 @@ check_contains "image has no providers directory of its own" "$out" "No such fil
 suite "broker runs unprivileged"
 check "container user is not root" "node" "$(docker exec "$BK" whoami 2>/dev/null)"
 
+suite "cloudflare profile is deployment config, not a query parameter"
+# #38. The profile decides how much authority the minted token carries. The
+# addon no longer reads it off a request header — this is the half that still
+# holds if a future one does: the broker mints its configured profile or
+# nothing. Refusal happens before the outbound mint, so this needs no
+# credentials and makes no call to api.cloudflare.com.
+CFB="$RUN_ID-broker-cf"
+docker run -d --name "$CFB" --network "$NET" \
+  -v "$REPO_ROOT/bank/cloudflare/broker:/app/providers:ro" \
+  -e CLOUDFLARE_PROFILE=dev -e AUDIT_LOG=/tmp/audit.jsonl "$IMG" >/dev/null
+track_container "$CFB"
+
+if wait_http "$CFB:8080/healthz" 200 "cloudflare broker"; then
+  check "a profile the deployment did not configure is refused" "403" \
+    "$(http_code "http://$CFB:8080/cloudflare/token?profile=prod-ir")"
+
+  trail=$(docker exec "$CFB" cat /tmp/audit.jsonl 2>/dev/null)
+  check_contains "the refusal reaches the audit trail" "$trail" '"reason":"profile_mismatch"'
+  check_contains "naming what was asked for" "$trail" '"requested":"prod-ir"'
+  check_not_contains "and nothing was issued" "$trail" 'token_issued'
+
+  # The configured profile gets past the gate. It cannot complete here — no
+  # minter token is mounted — and that is fine: the gate is what is under test.
+  code=$(http_code "http://$CFB:8080/cloudflare/token?profile=dev")
+  check_not_contains "the configured profile is not refused" "$code" "403"
+else
+  ko "cloudflare broker did not start" "$(docker logs "$CFB" 2>&1 | tail -20)"
+fi
+
 finish

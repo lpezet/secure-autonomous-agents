@@ -12,6 +12,14 @@
       "multiline": false
     }
   ],
+  "config": [
+    {
+      "env": "CLOUDFLARE_PROFILE",
+      "prompt": "Cloudflare profile this deployment issues",
+      "help": "Names one entry in the profiles map in cloudflare.js. Set on BOTH the proxy and the broker, to the same value — the proxy injects for it, the broker refuses to mint anything else. The lab container does not get to choose: one profile per deployment, so two privilege levels means two deployments.",
+      "default": "workers-deploy"
+    }
+  ],
   "broker_routes": [
     { "path": "/cloudflare/token", "exposed": false }
   ],

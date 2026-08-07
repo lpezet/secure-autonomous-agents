@@ -36,7 +36,7 @@ server {
   listen 8080;
   location / {
     default_type text/plain;
-    return 200 "RECEIVED-BY=\$host AUTH=\$http_authorization XAPIKEY=\$http_x_api_key TOKEN=\$http_authorization\n";
+    return 200 "RECEIVED-BY=\$host AUTH=\$http_authorization XAPIKEY=\$http_x_api_key TOKEN=\$http_authorization XCFPROFILE=[\$http_x_cf_profile]\n";
   }
 }
 EOF
@@ -50,7 +50,9 @@ server {
   location = /github/token      { return 200 '{"token":"$MARKER"}'; }
   location = /anthropic/cred    { return 200 '{"type":"api_key","value":"$MARKER"}'; }
   location = /anthropic/key     { return 200 '{"key":"$MARKER"}'; }
-  location = /cloudflare/token  { return 200 '{"token":"$MARKER"}'; }
+  # Echoes the requested profile back inside the token, so the injected
+  # Authorization header reveals which profile the addon actually asked for.
+  location = /cloudflare/token  { return 200 '{"token":"$MARKER-\$arg_profile"}'; }
   location / { return 404 '{"error":"no such provider route"}'; }
 }
 EOF
@@ -80,8 +82,13 @@ run_proxy() { # run_proxy <name> <addon-file>...
   mkdir -p "$dir"
   cp stack/proxy/addons/000_policy.py "$dir/"
   local a; for a in "$@"; do cp "$a" "$dir/"; done
+  # PROXY_ENV passes deployment configuration to the addon under test. Which
+  # Cloudflare profile gets injected is exactly that — config on the proxy
+  # service, not anything the caller can put in a request — so the suite below
+  # needs to set it the way a real deployment would.
   docker run -d --name "$name" --network "$NET" -v "$dir:/addons:ro" \
-    -e BROKER_URL=http://broker:8080 -e PYTHONUNBUFFERED=1 "$IMG" >/dev/null
+    -e BROKER_URL=http://broker:8080 -e PYTHONUNBUFFERED=1 \
+    ${PROXY_ENV:-} "$IMG" >/dev/null
   track_container "$name"
   local i
   for i in $(seq 1 60); do
@@ -151,9 +158,37 @@ if run_proxy cloudflare "$DC_ADDONS/030_cloudflare.py"; then
 
   body=$(http_body "http://attacker-host:8080/client/v4/user" -H "Host: api.cloudflare.com" $P)
   check_not_contains "spoofed Host does NOT leak the token" "$body" "$MARKER"
+
+  # Unconfigured, the addon falls back to its shipped default.
+  body=$(http_body "http://api.cloudflare.com:8080/client/v4/user" $P)
+  check_contains "default profile is workers-deploy" "$body" "$MARKER-workers-deploy"
 else
   ko "cloudflare proxy did not start" "$(docker logs "$RUN_ID-cloudflare" 2>&1 | tail -20)"
 fi
+
+suite "the lab container cannot choose its own Cloudflare profile"
+# A permission ladder (dev / qa / prod-read / prod-ir) is decorative if the
+# agent picks the rung. This deployment is configured for `dev`; the caller
+# asks for `prod-ir` the way the pre-1.6.0 addon would have honoured.
+PROXY_ENV="-e CLOUDFLARE_PROFILE=dev"
+if run_proxy cloudflare-profile "$DC_ADDONS/030_cloudflare.py"; then
+  P="--proxy http://$RUN_ID-cloudflare-profile:8080"
+
+  body=$(http_body "http://api.cloudflare.com:8080/client/v4/user" $P)
+  check_contains "configured profile is what gets injected" "$body" "$MARKER-dev"
+
+  body=$(http_body "http://api.cloudflare.com:8080/client/v4/user" \
+                   -H "X-Cf-Profile: prod-ir" $P)
+  check_contains "a spoofed profile header still yields the configured profile" \
+    "$body" "$MARKER-dev"
+  check_not_contains "the requested profile is never minted" "$body" "prod-ir"
+  # Stripped as well as ignored, so it cannot reach the vendor either.
+  check_contains "the header does not survive to the destination" "$body" "XCFPROFILE=[]"
+else
+  ko "cloudflare-profile proxy did not start" \
+     "$(docker logs "$RUN_ID-cloudflare-profile" 2>&1 | tail -20)"
+fi
+unset PROXY_ENV
 
 # ------------------------------------------------------ broker unreachable
 

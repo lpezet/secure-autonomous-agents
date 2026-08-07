@@ -1,4 +1,6 @@
 """Inject Cloudflare scoped token for api.cloudflare.com calls."""
+import os
+
 import requests
 from mitmproxy import http, ctx
 from cachetools import TTLCache
@@ -7,7 +9,10 @@ import audit
 
 _cache = TTLCache(maxsize=4, ttl=300)
 BROKER_URL = "http://broker:8080"
-DEFAULT_PROFILE = "workers-deploy"
+
+# Which profile this deployment issues. Read once at load from the proxy's own
+# environment: deployment configuration, never request data. See request().
+PROFILE = os.environ.get("CLOUDFLARE_PROFILE", "workers-deploy")
 
 
 def _get_token(profile: str) -> str:
@@ -42,8 +47,14 @@ def request(flow: http.HTTPFlow) -> None:
     if flow.request.host != "api.cloudflare.com":
         return
 
-    # Allow caller to hint a profile via custom header (stripped before forwarding)
-    profile = flow.request.headers.pop("X-Cf-Profile", DEFAULT_PROFILE)
+    # X-Cf-Profile is dropped, not read. It used to select the profile, which
+    # made the lab container the author of its own authority: a ladder of
+    # profiles (dev / qa / prod-read / prod-ir) is decorative if the agent picks
+    # its own rung, and every audit line would faithfully record that `prod-ir`
+    # was issued to a caller entitled to `dev`. Same rule as flow.request.host
+    # over pretty_host above — a security decision must not be made from a value
+    # the untrusted side controls. Still stripped so it never reaches the vendor.
+    flow.request.headers.pop("X-Cf-Profile", None)
 
     # Strip first, as its own statement. _get_token() raises when the broker is
     # unreachable, so a single assignment that both strips and injects strips
@@ -52,11 +63,11 @@ def request(flow: http.HTTPFlow) -> None:
     if "Authorization" in flow.request.headers:
         del flow.request.headers["Authorization"]
 
-    flow.request.headers["Authorization"] = f"Bearer {_get_token(profile)}"
+    flow.request.headers["Authorization"] = f"Bearer {_get_token(PROFILE)}"
     ctx.log.info(
-        f"cloudflare: {flow.request.method} {_endpoint(flow)} (profile={profile})"
+        f"cloudflare: {flow.request.method} {_endpoint(flow)} (profile={PROFILE})"
     )
     audit.log_event(
-        "token_injected", provider="cloudflare", profile=profile,
+        "token_injected", provider="cloudflare", profile=PROFILE,
         method=flow.request.method, endpoint=_endpoint(flow),
     )

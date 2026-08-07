@@ -96,10 +96,15 @@ manifest precisely because exactly one of them is normally set.
 
 ### Cloudflare
 
-- **The token is minted per named profile**, not read off disk. `X-Cf-Profile`
-  hints which one; it is stripped before forwarding. Absent, the default is
-  `workers-deploy`. Add profiles inside the broker provider, where the
-  permission-group IDs live.
+- **The token is minted per named profile**, not read off disk. Add profiles
+  inside the broker provider, where the permission-group IDs live.
+- **Which profile is deployment configuration, not the agent's choice.** Set
+  `CLOUDFLARE_PROFILE` on **both** the `proxy` and `broker` services, to the
+  same value; it defaults to `workers-deploy`. The addon strips `X-Cf-Profile`
+  and discards it, and the broker refuses to mint any profile but its
+  configured one — so an addon that regresses to reading the header still
+  cannot widen what gets issued. Running against two privilege levels means
+  two deployments, not one deployment with a header.
 - **`CLOUDFLARE_API_TOKEN=proxy-injected` is a dummy** satisfying `wrangler`'s
   "am I authenticated" check. Never replace it with a real token.
 
@@ -171,6 +176,18 @@ being generated:
   `flow.request.pretty_host` — the latter is client-controlled and lets a
   spoofed `Host` header steal injected credentials or bypass the broker
   block.
+- **Which credential an addon attaches is deployment configuration, never
+  request data.** If a provider supports more than one privilege level —
+  profiles, tiers, scopes, environments — the level comes from the addon's
+  own environment, not from anything in the request. The lab container writes
+  every request header, so an addon reading one to decide what to inject lets
+  the agent name its own authority: a `dev` / `qa` / `prod` ladder is
+  decorative if the caller picks the rung, and the audit trail records the
+  escalation as though it had been authorised. Strip client headers, do not
+  read them. One privilege level per deployment; two levels means two
+  deployments, which is honest — they are genuinely separate blast radii.
+  This is the general form of the `pretty_host` rule above, and
+  `scripts/check-invariants.sh` enforces it (`header_selector`).
 - `cred-gateway` snippets must use exact-match `location = /path` blocks,
   never a prefix match — a prefix like `location /github/` exposes sibling
   routes that must stay broker-only.

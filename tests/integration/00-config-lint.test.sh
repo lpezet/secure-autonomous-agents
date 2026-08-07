@@ -187,6 +187,23 @@ for f in examples/*/proxy/*.py examples/*/.devcontainer/proxy/*.py stack/proxy/a
   else ko "$f — references pretty_host outside a comment" "$bad"; fi
 done
 
+suite "addons take no direction from a client-supplied request header"
+# The lab container writes these headers. An addon that binds one to a name is
+# letting the untrusted side steer what the addon does next — and for a
+# credential-injecting addon that means which credential gets attached.
+# 030_cloudflare.py shipped this until 1.6.0: X-Cf-Profile chose the profile, so
+# a dev/qa/prod ladder was decorative and the audit line recorded the escalated
+# profile as though it had been authorised.
+#
+# Stripping is not reading: a bare pop() or del is how a client header is
+# correctly dropped, and does not trip this.
+for f in examples/*/proxy/*.py examples/*/.devcontainer/proxy/*.py stack/proxy/addons/*.py \
+         bank/*/proxy/*.py; do
+  [ -f "$f" ] || continue
+  if bad=$(inv_header_selector "$f"); then ok "$(basename "$f") — reads no client header into a variable"
+  else ko "$f — binds a client-supplied header to a name it acts on" "$bad"; fi
+done
+
 suite "addons log a parsed endpoint, never a raw request path"
 # The trail is a plaintext file that observer serves over HTTP, and
 # mitmproxy's flow.request.path includes the query string. For a provider
